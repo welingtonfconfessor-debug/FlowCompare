@@ -1,5 +1,6 @@
 import { jsPDF } from "jspdf";
 import autoTable, { type CellDef } from "jspdf-autotable";
+import { FLOWCOMPARE_LOGO, type FlowCompareLogoPath } from "./brand";
 import type {
   ComparisonResult,
   Difference,
@@ -29,6 +30,49 @@ const COLORS = {
   yellow: [181, 137, 0] as [number, number, number],
   red: [201, 62, 54] as [number, number, number],
 };
+
+type PdfPathOperation =
+  | { op: "m" | "l"; c: [number, number] }
+  | { op: "h"; c: [] };
+
+function vectorPathOperations(path: FlowCompareLogoPath, x: number, y: number, logoScale: number) {
+  const tokens = path.d.match(/[MLZ]|-?\d+(?:\.\d+)?/g) ?? [];
+  const operations: PdfPathOperation[] = [];
+  let command: "M" | "L" | "Z" = "M";
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token === "M" || token === "L" || token === "Z") {
+      command = token;
+      if (command === "Z") operations.push({ op: "h", c: [] });
+      continue;
+    }
+
+    if (command === "Z") continue;
+    const sourceX = Number(token);
+    const sourceY = Number(tokens[index + 1]);
+    index += 1;
+    const logoX = path.translateX + (sourceX - path.originX) * path.scale;
+    const logoY = path.translateY + (sourceY - path.originY) * path.scale;
+    operations.push({
+      op: command === "M" ? "m" : "l",
+      c: [x + logoX * logoScale, y + logoY * logoScale],
+    });
+  }
+
+  return operations;
+}
+
+function drawFlowCompareLogo(pdf: jsPDF, x: number, y: number, width: number) {
+  const logoScale = width / FLOWCOMPARE_LOGO.width;
+  for (const path of FLOWCOMPARE_LOGO.paths) {
+    const color: [number, number, number] =
+      path.fill === "blue" ? [20, 103, 239] : [220, 230, 235];
+    pdf.setFillColor(...color);
+    pdf.path(vectorPathOperations(path, x, y, logoScale));
+    pdf.fillEvenOdd();
+  }
+}
 
 const CATEGORY_LABELS: Record<Difference["category"], string> = {
   geometry: "Geometria",
@@ -163,18 +207,11 @@ function addComparisonPreviewPage(
 
   pdf.setFillColor(...COLORS.dark);
   pdf.rect(0, 0, pageWidth, 24, "F");
-  pdf.setFillColor(...COLORS.blue);
-  pdf.roundedRect(14, 5, 14, 14, 2, 2, "F");
-  pdf.setTextColor(255, 255, 255);
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(10);
-  pdf.text("FC", 21, 14, { align: "center" });
-  pdf.setFontSize(15);
-  pdf.text("FlowCompare", 34, 11.5);
+  drawFlowCompareLogo(pdf, 14, 4.5, 68);
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(8.5);
   pdf.setTextColor(177, 191, 198);
-  pdf.text("Visualização ampliada da comparação", 34, 17);
+  pdf.text("Visualização ampliada da comparação", 88, 14.5);
   pdf.setTextColor(255, 255, 255);
   pdf.setFontSize(8);
   pdf.text(`${input.documentA.name}  x  ${input.documentB.name}`, pageWidth - 14, 14, {
@@ -260,18 +297,11 @@ export function createComparisonReportPdf(input: ComparisonReportInput) {
 
   pdf.setFillColor(...COLORS.dark);
   pdf.rect(0, 0, 210, 28, "F");
-  pdf.setFillColor(...COLORS.blue);
-  pdf.roundedRect(14, 7, 14, 14, 2, 2, "F");
-  pdf.setTextColor(255, 255, 255);
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(10);
-  pdf.text("FC", 21, 16, { align: "center" });
-  pdf.setFontSize(16);
-  pdf.text("FlowCompare", 34, 13);
+  drawFlowCompareLogo(pdf, 14, 5.5, 60);
   pdf.setFontSize(8.5);
   pdf.setFont("helvetica", "normal");
   pdf.setTextColor(177, 191, 198);
-  pdf.text("Relatório de divergências entre arquivos DXF", 34, 19);
+  pdf.text("Relatório de divergências entre arquivos DXF", 79, 15.5);
   pdf.setFontSize(7.5);
   pdf.text("Comparação geométrica em milímetros", 196, 16, { align: "right" });
 
