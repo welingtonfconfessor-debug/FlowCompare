@@ -1,17 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 140">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 476 554" role="img" aria-labelledby="title description">
+  <title id="title">FlowCompare</title>
+  <desc id="description">Símbolo vetorial FlowCompare.</desc>
   <defs>
-    <linearGradient id="blue" x1="8" y1="0" x2="126" y2="120" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#2382ff"/>
-      <stop offset="0.55" stop-color="#0f5df1"/>
-      <stop offset="1" stop-color="#0b46c9"/>
-    </linearGradient>
-    <linearGradient id="steel" x1="18" y1="5" x2="108" y2="130" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#445462"/>
-      <stop offset="0.55" stop-color="#263441"/>
-      <stop offset="1" stop-color="#3d4b58"/>
-    </linearGradient>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#1672fa"/><stop offset="0.55" stop-color="#075be8"/><stop offset="1" stop-color="#0646c7"/></linearGradient>
+    <linearGradient id="steel" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#445462"/><stop offset="0.55" stop-color="#263441"/><stop offset="1" stop-color="#3d4b58"/></linearGradient>
   </defs>
-  <path fill="url(#steel)" d="M60 4 116 37v17H91L60 36 27 55v26L8 92V44L60 4Z"/>
-  <path fill="url(#steel)" d="M8 96h25l27 16 36-21V68l20-12v47l-56 33L8 105v-9Z"/>
-  <path fill="url(#blue)" d="M8 82h27c17 0 24-6 35-19 14-17 28-25 50-25h6v20h-8c-15 0-22 4-33 17-15 18-28 27-51 27H8V82Z"/>
+  <g transform="translate(-96 -156)">
+    <path d="M96 348L99 292L333 156L345 160L355 169L368 174L407 200L415 202L457 229L563 288L572 298L570 312L455 312L339 242L332 242L170 338L170 438L100 481L96 480ZM96 562L100 558L223 558L263 582L267 588L280 592L327 622L341 626L353 616L375 606L403 586L493 534L496 530L497 426L535 402L568 402L572 406L571 572L337 710L323 706L99 574Z" fill="url(#steel)" fill-rule="evenodd"/>
+    <path d="M96 502L123 484L211 484L229 482L263 470L292 450L356 380L385 358L421 340L449 332L483 328L568 328L572 332L570 386L481 386L447 394L427 404L402 422L372 456L321 504L275 530L249 538L219 542L98 542Z" fill="url(#blue)" fill-rule="evenodd"/>
+  </g>
 </svg>
