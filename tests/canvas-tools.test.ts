@@ -7,6 +7,7 @@ import {
   measurementDistance,
   snapCanvasPoint,
   transformAfterCanvasDrag,
+  viewBoxForBounds,
 } from "../app/lib/canvas-tools";
 import type { Segment } from "../app/types";
 
@@ -77,4 +78,18 @@ test("régua prioriza a interseção exata sobre a projeção na linha", () => {
   ];
 
   assert.deepEqual(snapCanvasPoint({ x: 53, y: 2 }, segments, 6), { x: 50, y: 0 });
+});
+
+test("enquadra uma divergência preservando a proporção da área CAD", () => {
+  const focused = viewBoxForBounds(
+    { minX: 20, minY: 30, maxX: 20, maxY: 130 },
+    16 / 9,
+    0.1,
+    2,
+  );
+
+  assert.equal(focused.width / focused.height, 16 / 9);
+  assert.equal(focused.x + focused.width / 2, 20);
+  assert.equal(focused.y + focused.height / 2, -80);
+  assert.ok(focused.height > 100);
 });

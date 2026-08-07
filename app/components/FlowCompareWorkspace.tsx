@@ -44,6 +44,7 @@ import {
   measurementDistance,
   snapCanvasPoint,
   transformAfterCanvasDrag,
+  viewBoxForBounds,
 } from "../lib/canvas-tools";
 import { compareDocuments } from "../lib/comparison";
 import { parseDxfFile } from "../lib/dxf";
@@ -278,6 +279,7 @@ export default function FlowCompareWorkspace() {
   const [isPanning, setIsPanning] = useState(false);
   const [isMovingDrawing, setIsMovingDrawing] = useState(false);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [focusedDifferenceId, setFocusedDifferenceId] = useState<string | null>(null);
   const inputARef = useRef<HTMLInputElement>(null);
   const inputBRef = useRef<HTMLInputElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -382,6 +384,7 @@ export default function FlowCompareWorkspace() {
       if (nextA && nextB) setTransform(nextTransform);
       setViewBox(fitted);
       setBaseViewBox(fitted);
+      setFocusedDifferenceId(null);
       setMeasurement(null);
       setSnapCandidate(null);
       setNotice(`${file.name} carregado com sucesso.`);
@@ -410,6 +413,7 @@ export default function FlowCompareWorkspace() {
     setError("");
     setNotice("");
     setCanvasTool("pan");
+    setFocusedDifferenceId(null);
     setMeasurement(null);
     setSnapCandidate(null);
     setViewBox(EMPTY_VIEWBOX);
@@ -612,13 +616,37 @@ export default function FlowCompareWorkspace() {
   }, [comparison, differenceFilter]);
 
   const highlighted = useMemo(
-    () =>
-      (comparison?.differences ?? [])
-        .filter((difference) => difference.severity !== "correct" && difference.source !== "metric")
-        .sort((first, second) => second.value - first.value)
-        .slice(0, 8),
-    [comparison],
+    () => {
+      const differences = comparison?.differences ?? [];
+      const focused = differences.find(
+        (difference) => difference.id === focusedDifferenceId && difference.severity !== "correct",
+      );
+      const visible = differences
+        .filter(
+          (difference) =>
+            difference.severity !== "correct" &&
+            difference.source !== "metric" &&
+            difference.id !== focused?.id,
+        )
+        .sort((first, second) => second.value - first.value);
+      return focused ? [focused, ...visible].slice(0, 8) : visible.slice(0, 8);
+    },
+    [comparison, focusedDifferenceId],
   );
+
+  const focusDifference = useCallback((difference: Difference) => {
+    const rect = svgRef.current?.getBoundingClientRect();
+    const aspectRatio = rect?.height ? rect.width / rect.height : viewBox.width / viewBox.height;
+    const minimumSpan = Math.max(baseViewBox.width, baseViewBox.height) * 0.015;
+    setViewBox(viewBoxForBounds(difference.bounds, aspectRatio, 0.16, minimumSpan));
+    setFocusedDifferenceId(difference.id);
+    setHighlightDifferences(true);
+    setOnlyDifferences(false);
+    setCanvasTool("pan");
+    setMeasurement(null);
+    setSnapCandidate(null);
+    setNotice(`Visualização centralizada em ${difference.label}.`);
+  }, [baseViewBox.height, baseViewBox.width, viewBox.height, viewBox.width]);
 
   const zoomPercent = Math.round((baseViewBox.width / viewBox.width) * 100);
   const measurementLabelSize = Math.max(viewBox.width / 95, 2.5);
@@ -789,7 +817,7 @@ export default function FlowCompareWorkspace() {
                     const labelX = region.x + region.width + padding * 1.4;
                     const labelY = region.y - padding - index * labelSize * 0.08;
                     return (
-                      <g key={difference.id} className={`difference-mark severity-${difference.severity}`}>
+                      <g key={difference.id} className={`difference-mark severity-${difference.severity} ${difference.id === focusedDifferenceId ? "is-focused" : ""}`}>
                         <rect className="diff-box" x={region.x - padding} y={region.y - padding} width={region.width + padding * 2} height={region.height + padding * 2} rx={padding * 0.25} />
                         <line className="diff-line" x1={region.x + region.width} y1={region.y} x2={labelX} y2={labelY} />
                         <text className="diff-label" x={labelX + padding * 0.35} y={labelY} fontSize={labelSize}>
@@ -874,7 +902,12 @@ export default function FlowCompareWorkspace() {
             <div className="difference-list">
               {visibleDifferences.length ? (
                 visibleDifferences.map((difference) => (
-                  <DifferenceRow key={difference.id} difference={difference} />
+                  <DifferenceRow
+                    key={difference.id}
+                    difference={difference}
+                    focused={difference.id === focusedDifferenceId}
+                    onFocus={focusDifference}
+                  />
                 ))
               ) : (
                 <div className="empty-list">
@@ -904,15 +937,35 @@ export default function FlowCompareWorkspace() {
   );
 }
 
-function DifferenceRow({ difference }: { difference: Difference }) {
+function DifferenceRow({
+  difference,
+  focused,
+  onFocus,
+}: {
+  difference: Difference;
+  focused: boolean;
+  onFocus: (difference: Difference) => void;
+}) {
   const isCount = difference.id.includes("holes") || difference.id.includes("cutouts") || difference.id.includes("contours");
   const signed = difference.signedValue;
   const value = `${signed > 0 ? "+" : signed < 0 ? "−" : ""}${formatNumber(Math.abs(signed))}${isCount ? "" : " mm"}`;
   return (
-    <div className={`difference-row severity-${difference.severity}`}>
+    <div className={`difference-row severity-${difference.severity} ${focused ? "is-focused" : ""}`}>
       <span title={difference.label}>{difference.label}</span>
       <strong>{value}</strong>
-      {difference.severity === "correct" ? <Check size={15} /> : <Eye size={14} />}
+      {difference.severity === "correct" ? (
+        <Check size={15} />
+      ) : (
+        <button
+          className="difference-focus"
+          type="button"
+          onClick={() => onFocus(difference)}
+          title={`Ir para ${difference.label}`}
+          aria-label={`Ir para ${difference.label}`}
+        >
+          <Eye size={15} />
+        </button>
+      )}
     </div>
   );
 }

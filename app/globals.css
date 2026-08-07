@@ -1137,7 +1137,7 @@ select:focus-visible {
 .difference-header,
 .difference-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 82px 18px;
+  grid-template-columns: minmax(0, 1fr) 82px 26px;
   align-items: center;
   gap: 6px;
 }
@@ -1164,6 +1164,7 @@ select:focus-visible {
   color: #aeb8bd;
   font-size: var(--text-secondary);
   padding: 0 3px;
+  transition: background 150ms ease, box-shadow 150ms ease;
 }
 
 .difference-row > span {
@@ -1181,6 +1182,47 @@ select:focus-visible {
 
 .difference-row svg {
   justify-self: end;
+}
+
+.difference-row.is-focused {
+  background: #122333;
+  box-shadow: inset 2px 0 #4c93ff;
+}
+
+.difference-focus {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  justify-self: end;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: currentColor;
+  cursor: pointer;
+}
+
+.difference-focus:hover,
+.difference-focus:focus-visible {
+  border-color: #446174;
+  background: #1a2c37;
+  color: white;
+}
+
+.difference-mark.is-focused .diff-box {
+  stroke-width: 2;
+  animation: difference-focus-pulse 850ms ease-out 2;
+}
+
+@keyframes difference-focus-pulse {
+  0% {
+    fill: rgba(76, 147, 255, 0.22);
+    stroke: #8fc0ff;
+  }
+  100% {
+    fill: rgba(245, 200, 66, 0.06);
+  }
 }
 
 .difference-row.severity-correct {
@@ -1436,5 +1478,9 @@ select:focus-visible {
   *::after {
     scroll-behavior: auto !important;
     transition: none !important;
+  }
+
+  .difference-mark.is-focused .diff-box {
+    animation: none;
   }
 }

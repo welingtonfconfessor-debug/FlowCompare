@@ -1,4 +1,4 @@
-import type { DrawingTransform, Point, Segment } from "../types";
+import type { Bounds, DrawingTransform, Point, Segment } from "../types";
 
 export type CanvasRect = {
   left: number;
@@ -13,6 +13,34 @@ export type CanvasViewBox = {
   width: number;
   height: number;
 };
+
+export function viewBoxForBounds(
+  bounds: Bounds,
+  aspectRatio: number,
+  paddingRatio = 0.16,
+  minimumSpan = 1,
+): CanvasViewBox {
+  const rawWidth = Math.max(0, bounds.maxX - bounds.minX);
+  const rawHeight = Math.max(0, bounds.maxY - bounds.minY);
+  const span = Math.max(rawWidth, rawHeight, minimumSpan);
+  const padding = span * paddingRatio;
+  let width = Math.max(rawWidth, minimumSpan) + padding * 2;
+  let height = Math.max(rawHeight, minimumSpan) + padding * 2;
+  const targetAspect = Math.max(Number.EPSILON, aspectRatio);
+  const currentAspect = width / height;
+
+  if (currentAspect < targetAspect) width = height * targetAspect;
+  else height = width / targetAspect;
+
+  const centerX = (bounds.minX + bounds.maxX) / 2;
+  const centerY = -(bounds.minY + bounds.maxY) / 2;
+  return {
+    x: centerX - width / 2,
+    y: centerY - height / 2,
+    width,
+    height,
+  };
+}
 
 function clientToCanvasScale(rect: CanvasRect, viewBox: CanvasViewBox) {
   const horizontalScale = rect.width / viewBox.width;
