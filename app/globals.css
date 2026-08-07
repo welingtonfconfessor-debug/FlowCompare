@@ -1176,6 +1176,12 @@ select:focus-visible {
   color: #c9d0d4;
 }
 
+.report-button:hover:not(:disabled) {
+  border-color: #3978d3;
+  background: #174a8b;
+  color: white;
+}
+
 @media (max-width: 1240px) {
   .topbar {
     grid-template-columns: 265px minmax(0, 1fr) auto;

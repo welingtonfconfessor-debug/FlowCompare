@@ -80,6 +80,51 @@ const pathFromSegments = (segments: Segment[]) =>
     .map((segment) => `M ${segment.a.x} ${-segment.a.y} L ${segment.b.x} ${-segment.b.y}`)
     .join(" ");
 
+async function svgToPngDataUrl(svg: SVGSVGElement, width = 1600, height = 1000) {
+  const clone = svg.cloneNode(true) as SVGSVGElement;
+  clone.setAttribute("width", String(width));
+  clone.setAttribute("height", String(height));
+  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
+  style.textContent = `
+    svg { background: #071015; }
+    .grid-minor { stroke: #132129; fill: none; stroke-width: .45; }
+    .grid-major { stroke: #1c2d35; fill: none; stroke-width: .7; }
+    .axis-line { stroke: #52616a; stroke-width: .7; stroke-dasharray: 7 6; opacity: .55; }
+    .drawing-a { stroke: #ff4d57; fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+    .drawing-b { stroke: #2f7df6; fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+    .diff-box { stroke: #f5c842; fill: rgba(245,200,66,.08); stroke-width: 1; stroke-dasharray: 6 4; }
+    .diff-line { stroke: #f5c842; fill: none; stroke-width: 1; }
+    .diff-label { fill: #f5c842; font-family: Arial, sans-serif; font-weight: 700; paint-order: stroke; stroke: #071015; stroke-width: 2px; }
+    .severity-large .diff-box, .severity-large .diff-line { stroke: #f08a45; }
+    .severity-large .diff-label { fill: #ff9b58; }
+  `;
+  clone.prepend(style);
+  const source = new XMLSerializer().serializeToString(clone);
+  const blob = new Blob([source], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const nextImage = new Image();
+      nextImage.onload = () => resolve(nextImage);
+      nextImage.onerror = () => reject(new Error("Não foi possível preparar a imagem da comparação."));
+      nextImage.src = url;
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("O navegador não conseguiu preparar a imagem do relatório.");
+    context.fillStyle = "#071015";
+    context.fillRect(0, 0, width, height);
+    context.drawImage(image, 0, 0, width, height);
+    return canvas.toDataURL("image/png", 0.95);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 const boundsToSvg = (bounds: Bounds) => ({
   x: bounds.minX,
   y: -bounds.maxY,
@@ -233,6 +278,7 @@ export default function FlowCompareWorkspace() {
   const [viewBox, setViewBox] = useState<SvgViewBox>(EMPTY_VIEWBOX);
   const [baseViewBox, setBaseViewBox] = useState<SvgViewBox>(EMPTY_VIEWBOX);
   const [isPanning, setIsPanning] = useState(false);
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const inputARef = useRef<HTMLInputElement>(null);
   const inputBRef = useRef<HTMLInputElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -401,43 +447,46 @@ export default function FlowCompareWorkspace() {
   const exportImage = async () => {
     const svg = svgRef.current;
     if (!svg || (!documentA && !documentB)) return;
-    const clone = svg.cloneNode(true) as SVGSVGElement;
-    clone.setAttribute("width", "1600");
-    clone.setAttribute("height", "1000");
-    const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
-    style.textContent = `
-      svg { background: #071015; }
-      .drawing-a { stroke: #ff4d57; fill: none; stroke-width: 1.5; }
-      .drawing-b { stroke: #2f7df6; fill: none; stroke-width: 1.5; }
-      .diff-box { stroke: #f5c842; fill: rgba(245,200,66,.08); stroke-width: 1; stroke-dasharray: 6 4; }
-      .diff-line { stroke: #f5c842; fill: none; stroke-width: 1; }
-      .diff-label { fill: #f5c842; font: 600 12px Arial; }
-    `;
-    clone.prepend(style);
-    const source = new XMLSerializer().serializeToString(clone);
-    const blob = new Blob([source], { type: "image/svg+xml;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const image = new Image();
-    image.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = 1600;
-      canvas.height = 1000;
-      const context = canvas.getContext("2d");
-      if (!context) return;
-      context.fillStyle = "#071015";
-      context.fillRect(0, 0, canvas.width, canvas.height);
-      context.drawImage(image, 0, 0, canvas.width, canvas.height);
-      canvas.toBlob((png) => {
-        if (!png) return;
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(png);
-        link.download = "flowcompare-comparacao.png";
-        link.click();
-        URL.revokeObjectURL(link.href);
-      }, "image/png");
-      URL.revokeObjectURL(url);
-    };
-    image.src = url;
+    try {
+      const imageData = await svgToPngDataUrl(svg);
+      const link = document.createElement("a");
+      link.href = imageData;
+      link.download = "flowcompare-comparacao.png";
+      link.click();
+    } catch (imageError) {
+      setError(imageError instanceof Error ? imageError.message : "Não foi possível exportar a imagem.");
+    }
+  };
+
+  const generateReport = async () => {
+    if (!documentA || !documentB || !comparison || isGeneratingReport) return;
+    setIsGeneratingReport(true);
+    setError("");
+    setNotice("");
+    try {
+      const comparisonImage = svgRef.current
+        ? await svgToPngDataUrl(svgRef.current, 1400, 800)
+        : undefined;
+      const { downloadComparisonReportPdf } = await import("../lib/report");
+      downloadComparisonReportPdf({
+        documentA,
+        documentB,
+        comparison,
+        tolerance,
+        transform,
+        comparisonImage,
+      });
+      const actionable = comparison.small + comparison.large;
+      setNotice(
+        actionable
+          ? `Relatório gerado com ${actionable} divergência(s) acima da tolerância.`
+          : "Relatório gerado sem divergências acima da tolerância.",
+      );
+    } catch (reportError) {
+      setError(reportError instanceof Error ? reportError.message : "Não foi possível gerar o relatório PDF.");
+    } finally {
+      setIsGeneratingReport(false);
+    }
   };
 
   const visibleDifferences = useMemo(() => {
@@ -468,7 +517,7 @@ export default function FlowCompareWorkspace() {
         <nav className="top-actions" aria-label="Ações do projeto">
           <button type="button" onClick={resetProject}><FilePlus2 size={17} />Novo</button>
           <button type="button" onClick={() => (documentA ? inputBRef.current : inputARef.current)?.click()}><FolderOpen size={17} />Abrir</button>
-          <button type="button" disabled title="Estrutura preparada para a próxima etapa"><FileDown size={17} />Relatório PDF</button>
+          <button type="button" onClick={generateReport} disabled={!comparison || isGeneratingReport} title="Gerar relatório da comparação atual"><FileDown size={17} />{isGeneratingReport ? "Gerando PDF..." : "Relatório PDF"}</button>
           <button type="button" onClick={exportImage} disabled={!documentA && !documentB}><ImageDown size={17} />Exportar imagem</button>
         </nav>
         <div className="top-tools">
@@ -707,7 +756,7 @@ export default function FlowCompareWorkspace() {
             <GeometryRow label="Linhas de dobra" a={documentA?.stats.bends} b={documentB?.stats.bends} />
           </section>
 
-          <button type="button" className="report-button" disabled title="Estrutura de relatório preparada para uma próxima etapa"><Download size={17} />Gerar relatório PDF</button>
+          <button type="button" className="report-button" onClick={generateReport} disabled={!comparison || isGeneratingReport} title="Gerar relatório com as divergências encontradas"><Download size={17} />{isGeneratingReport ? "Gerando relatório..." : "Gerar relatório PDF"}</button>
         </aside>
       </div>
     </main>

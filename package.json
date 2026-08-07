@@ -12,12 +12,15 @@
     "start": "vinext start",
     "test": "vinext build && node --test tests/rendered-html.test.mjs",
     "test:geometry": "tsx --test tests/geometry-comparison.test.ts",
+    "test:report": "tsx --test tests/report-generation.test.ts",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",
     "dxf-parser": "^1.1.2",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
     "lucide-react": "^1.28.0",
     "react": "19.2.6",
     "react-dom": "19.2.6"

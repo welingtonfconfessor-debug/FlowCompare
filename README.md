@@ -23,6 +23,7 @@ FlowCompare é uma base web para importar, sobrepor e comparar dois arquivos DXF
 - Métricas de largura, comprimento, extensão geométrica, furos, recortes, contornos e camadas de dobra.
 - Filtro para mostrar somente diferenças e opção de ignorar geometrias internas.
 - Exportação da comparação em PNG.
+- Relatório PDF com arquivos, tolerância, alinhamento, métricas, imagem da sobreposição e divergências classificadas.
 
 ## Entidades DXF suportadas
 
@@ -35,7 +36,7 @@ Linhas em camadas cujo nome contém `BEND`, `FOLD`, `DOBRA` ou `VINCO` já são 
 - Emparelhamento topológico avançado entre entidades equivalentes.
 - Alinhamento por pontos, furos ou contorno com estimativa automática de rotação.
 - Comparação dedicada de linhas de dobra.
-- Relatório PDF com dados, imagem e critérios da comparação.
+- Assinatura e histórico de versões dos relatórios PDF.
 
 ## Execução
 
@@ -48,6 +49,7 @@ Testes e validação:
 
 ```powershell
 pnpm test:geometry
+pnpm test:report
 pnpm test
 pnpm lint
 ```
