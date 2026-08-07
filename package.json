@@ -13,6 +13,7 @@
     "test": "vinext build && node --test tests/rendered-html.test.mjs",
     "test:geometry": "tsx --test tests/geometry-comparison.test.ts",
     "test:alignment": "tsx --test tests/alignment.test.ts",
+    "test:canvas-tools": "tsx --test tests/canvas-tools.test.ts",
     "test:report": "tsx --test tests/report-generation.test.ts",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate"

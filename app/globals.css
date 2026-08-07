@@ -756,6 +756,18 @@ select:focus-visible {
   cursor: grabbing;
 }
 
+.drawing-stage.tool-measure .drawing-canvas {
+  cursor: crosshair;
+}
+
+.drawing-stage.tool-move .drawing-canvas {
+  cursor: move;
+}
+
+.drawing-stage.is-moving-drawing .drawing-canvas {
+  cursor: grabbing;
+}
+
 .grid-minor,
 .grid-major {
   fill: none;
@@ -834,6 +846,41 @@ select:focus-visible {
 
 .severity-large .diff-label {
   fill: #ff9b58;
+}
+
+.measurement-overlay {
+  pointer-events: none;
+}
+
+.measurement-line,
+.measurement-point {
+  stroke: var(--yellow);
+  vector-effect: non-scaling-stroke;
+}
+
+.measurement-line {
+  fill: none;
+  stroke-width: 1.2;
+  stroke-dasharray: 5 3;
+}
+
+.measurement-point {
+  fill: #071015;
+  stroke-width: 1.2;
+}
+
+.measurement-label {
+  fill: #fff1a8;
+  font-family: var(--font-ui);
+  font-weight: 720;
+  paint-order: stroke;
+  stroke: #071015;
+  stroke-width: 2px;
+  stroke-linejoin: round;
+}
+
+.measurement-overlay.preview {
+  opacity: 0.78;
 }
 
 .empty-stage {
@@ -918,6 +965,13 @@ select:focus-visible {
   color: white;
   border-color: #2867bf;
   background: #154999;
+}
+
+.canvas-tools button:disabled {
+  color: #4d5b62;
+  border-color: transparent;
+  background: transparent;
+  cursor: not-allowed;
 }
 
 .summary-section {

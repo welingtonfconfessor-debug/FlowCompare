@@ -39,6 +39,12 @@ import {
   type WheelEvent as ReactWheelEvent,
 } from "react";
 import { alignmentForDocuments, type AlignmentMethod } from "../lib/alignment";
+import {
+  canvasPointFromClient,
+  measurementDistance,
+  snapCanvasPoint,
+  transformAfterCanvasDrag,
+} from "../lib/canvas-tools";
 import { compareDocuments } from "../lib/comparison";
 import { parseDxfFile } from "../lib/dxf";
 import { transformBounds, unionBounds } from "../lib/geometry";
@@ -48,12 +54,20 @@ import type {
   DifferenceSeverity,
   DrawingTransform,
   DxfDocument,
+  Point,
   Segment,
 } from "../types";
 
 type Side = "A" | "B";
 type ViewTab = "view" | "differences" | "overlay";
 type DifferenceFilter = "all" | DifferenceSeverity;
+type CanvasTool = "pan" | "measure" | "move";
+
+type Measurement = {
+  start: Point;
+  end: Point;
+  complete: boolean;
+};
 
 type SvgViewBox = {
   x: number;
@@ -99,6 +113,9 @@ async function svgToPngDataUrl(svg: SVGSVGElement, width = 1600, height = 1000) 
     .diff-label { fill: #f5c842; font-family: Arial, sans-serif; font-weight: 700; paint-order: stroke; stroke: #071015; stroke-width: 2px; }
     .severity-large .diff-box, .severity-large .diff-line { stroke: #f08a45; }
     .severity-large .diff-label { fill: #ff9b58; }
+    .measurement-line { stroke: #f5c842; fill: none; stroke-width: 1.2; stroke-dasharray: 5 3; }
+    .measurement-point { fill: #071015; stroke: #f5c842; stroke-width: 1.2; }
+    .measurement-label { fill: #fff1a8; font-family: Arial, sans-serif; font-weight: 700; paint-order: stroke; stroke: #071015; stroke-width: 2px; }
   `;
   clone.prepend(style);
   const source = new XMLSerializer().serializeToString(clone);
@@ -255,12 +272,21 @@ export default function FlowCompareWorkspace() {
   const [differenceFilter, setDifferenceFilter] = useState<DifferenceFilter>("all");
   const [viewBox, setViewBox] = useState<SvgViewBox>(EMPTY_VIEWBOX);
   const [baseViewBox, setBaseViewBox] = useState<SvgViewBox>(EMPTY_VIEWBOX);
+  const [canvasTool, setCanvasTool] = useState<CanvasTool>("pan");
+  const [measurement, setMeasurement] = useState<Measurement | null>(null);
   const [isPanning, setIsPanning] = useState(false);
+  const [isMovingDrawing, setIsMovingDrawing] = useState(false);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const inputARef = useRef<HTMLInputElement>(null);
   const inputBRef = useRef<HTMLInputElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const panRef = useRef<{ x: number; y: number; viewBox: SvgViewBox } | null>(null);
+  const moveRef = useRef<{
+    x: number;
+    y: number;
+    transform: DrawingTransform;
+    latest: DrawingTransform;
+  } | null>(null);
 
   const comparison = useMemo(() => {
     if (!documentA || !documentB) return null;
@@ -298,6 +324,16 @@ export default function FlowCompareWorkspace() {
         : transformedSegmentsB,
     [onlyDifferences, transformedSegmentsB, differingEntityIds],
   );
+  const measurementSegments = useMemo(
+    () => [
+      ...(showA ? displaySegmentsA : []),
+      ...(showB ? displaySegmentsB : []),
+    ],
+    [displaySegmentsA, displaySegmentsB, showA, showB],
+  );
+  const measuredDistance = measurement
+    ? measurementDistance(measurement.start, measurement.end)
+    : 0;
 
   const fitView = useCallback(() => {
     const next = viewForDocuments(documentA, documentB, transform);
@@ -317,6 +353,7 @@ export default function FlowCompareWorkspace() {
     setTransform(next);
     setViewBox(fitted);
     setBaseViewBox(fitted);
+    setMeasurement(null);
     setNotice(`Desenhos realinhados mantendo a rotação de ${formatNumber(next.rotation, 1)}°.`);
   }, [alignmentMethod, documentA, documentB, transform.rotation]);
 
@@ -339,6 +376,7 @@ export default function FlowCompareWorkspace() {
       if (nextA && nextB) setTransform(nextTransform);
       setViewBox(fitted);
       setBaseViewBox(fitted);
+      setMeasurement(null);
       setNotice(`${file.name} carregado com sucesso.`);
     } catch (fileError) {
       setError(fileError instanceof Error ? fileError.message : "Não foi possível ler este DXF.");
@@ -364,6 +402,8 @@ export default function FlowCompareWorkspace() {
     setTransform(EMPTY_TRANSFORM);
     setError("");
     setNotice("");
+    setCanvasTool("pan");
+    setMeasurement(null);
     setViewBox(EMPTY_VIEWBOX);
     setBaseViewBox(EMPTY_VIEWBOX);
   };
@@ -407,13 +447,67 @@ export default function FlowCompareWorkspace() {
     });
   };
 
-  const startPan = (event: ReactPointerEvent<SVGSVGElement>) => {
+  const measurementPoint = (event: ReactPointerEvent<SVGSVGElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const point = canvasPointFromClient(event.clientX, event.clientY, rect, viewBox);
+    const snapDistance = Math.max(viewBox.width, viewBox.height) / 80;
+    return snapCanvasPoint(point, measurementSegments, snapDistance);
+  };
+
+  const startCanvasInteraction = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (canvasTool === "measure") {
+      const point = measurementPoint(event);
+      if (!measurement || measurement.complete) {
+        setMeasurement({ start: point, end: point, complete: false });
+        setNotice("");
+      } else {
+        const next = { ...measurement, end: point, complete: true };
+        setMeasurement(next);
+        setNotice(`Medição concluída: ${formatNumber(measurementDistance(next.start, next.end))} mm.`);
+      }
+      return;
+    }
+
     event.currentTarget.setPointerCapture(event.pointerId);
+    if (canvasTool === "move" && documentB) {
+      moveRef.current = {
+        x: event.clientX,
+        y: event.clientY,
+        transform,
+        latest: transform,
+      };
+      setIsMovingDrawing(true);
+      setMeasurement(null);
+      return;
+    }
+
     panRef.current = { x: event.clientX, y: event.clientY, viewBox };
     setIsPanning(true);
   };
 
-  const movePan = (event: ReactPointerEvent<SVGSVGElement>) => {
+  const moveCanvasInteraction = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (canvasTool === "measure") {
+      if (measurement && !measurement.complete) {
+        setMeasurement({ ...measurement, end: measurementPoint(event) });
+      }
+      return;
+    }
+
+    const moving = moveRef.current;
+    if (moving) {
+      const rect = event.currentTarget.getBoundingClientRect();
+      const next = transformAfterCanvasDrag(
+        moving.transform,
+        { x: moving.x, y: moving.y },
+        { x: event.clientX, y: event.clientY },
+        rect,
+        viewBox,
+      );
+      moving.latest = next;
+      setTransform(next);
+      return;
+    }
+
     const start = panRef.current;
     if (!start) return;
     const rect = event.currentTarget.getBoundingClientRect();
@@ -424,9 +518,24 @@ export default function FlowCompareWorkspace() {
     });
   };
 
-  const endPan = () => {
+  const endCanvasInteraction = () => {
+    const moved = moveRef.current?.latest;
+    if (moved) {
+      setNotice(`Arquivo B ajustado para X ${formatNumber(moved.x)} mm e Y ${formatNumber(moved.y)} mm.`);
+    }
+    moveRef.current = null;
     panRef.current = null;
+    setIsMovingDrawing(false);
     setIsPanning(false);
+  };
+
+  const selectCanvasTool = (tool: CanvasTool) => {
+    panRef.current = null;
+    moveRef.current = null;
+    setIsPanning(false);
+    setIsMovingDrawing(false);
+    setCanvasTool(tool);
+    if (tool === "measure" || tool === "move") setMeasurement(null);
   };
 
   const exportImage = async () => {
@@ -490,6 +599,13 @@ export default function FlowCompareWorkspace() {
   );
 
   const zoomPercent = Math.round((baseViewBox.width / viewBox.width) * 100);
+  const measurementLabelSize = Math.max(viewBox.width / 95, 2.5);
+  const measurementMidpoint = measurement
+    ? {
+        x: (measurement.start.x + measurement.end.x) / 2,
+        y: (measurement.start.y + measurement.end.y) / 2,
+      }
+    : null;
 
   return (
     <main className="flow-app">
@@ -616,16 +732,16 @@ export default function FlowCompareWorkspace() {
             <span><i className="legend-line difference" />Diferença</span>
           </div>
 
-          <div className={`drawing-stage ${isPanning ? "is-panning" : ""}`}>
+          <div className={`drawing-stage tool-${canvasTool} ${isPanning ? "is-panning" : ""} ${isMovingDrawing ? "is-moving-drawing" : ""}`}>
             <svg
               ref={svgRef}
               className="drawing-canvas"
               viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`}
               onWheel={handleWheel}
-              onPointerDown={startPan}
-              onPointerMove={movePan}
-              onPointerUp={endPan}
-              onPointerCancel={endPan}
+              onPointerDown={startCanvasInteraction}
+              onPointerMove={moveCanvasInteraction}
+              onPointerUp={endCanvasInteraction}
+              onPointerCancel={endCanvasInteraction}
               aria-label="Área de comparação dos desenhos DXF"
             >
               <defs>
@@ -660,6 +776,16 @@ export default function FlowCompareWorkspace() {
                     );
                   })
                 : null}
+              {measurement && measurementMidpoint ? (
+                <g className={`measurement-overlay ${measurement.complete ? "complete" : "preview"}`}>
+                  <line className="measurement-line" x1={measurement.start.x} y1={measurement.start.y} x2={measurement.end.x} y2={measurement.end.y} />
+                  <circle className="measurement-point" cx={measurement.start.x} cy={measurement.start.y} r={measurementLabelSize * 0.28} />
+                  <circle className="measurement-point" cx={measurement.end.x} cy={measurement.end.y} r={measurementLabelSize * 0.28} />
+                  <text className="measurement-label" x={measurementMidpoint.x} y={measurementMidpoint.y - measurementLabelSize * 0.55} fontSize={measurementLabelSize} textAnchor="middle">
+                    {`${formatNumber(measuredDistance)} mm`}
+                  </text>
+                </g>
+              ) : null}
             </svg>
 
             {!documentA && !documentB ? (
@@ -675,10 +801,10 @@ export default function FlowCompareWorkspace() {
             ) : null}
 
             <div className="canvas-tools">
-              <button className="active" type="button" title="Movimentar"><Hand size={17} /></button>
-              <button type="button" title="Centralizar" onClick={fitView}><Focus size={17} /></button>
-              <button type="button" title="Medição"><Ruler size={17} /></button>
-              <button type="button" title="Ajuste manual"><Move size={17} /></button>
+              <button className={canvasTool === "pan" ? "active" : ""} type="button" title="Navegar pelo desenho" aria-pressed={canvasTool === "pan"} onClick={() => selectCanvasTool("pan")}><Hand size={17} /></button>
+              <button type="button" title="Enquadrar desenhos" onClick={() => { fitView(); setNotice("Visualização ajustada à área dos desenhos."); }}><Focus size={17} /></button>
+              <button className={canvasTool === "measure" ? "active" : ""} type="button" title="Medir entre dois pontos" aria-pressed={canvasTool === "measure"} disabled={!documentA && !documentB} onClick={() => selectCanvasTool("measure")}><Ruler size={17} /></button>
+              <button className={canvasTool === "move" ? "active" : ""} type="button" title="Arrastar o Arquivo B" aria-pressed={canvasTool === "move"} disabled={!documentB} onClick={() => selectCanvasTool("move")}><Move size={17} /></button>
             </div>
           </div>
         </section>
