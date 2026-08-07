@@ -14,15 +14,43 @@ export type CanvasViewBox = {
   height: number;
 };
 
+function clientToCanvasScale(rect: CanvasRect, viewBox: CanvasViewBox) {
+  const horizontalScale = rect.width / viewBox.width;
+  const verticalScale = rect.height / viewBox.height;
+  return Math.max(Number.EPSILON, Math.min(horizontalScale, verticalScale));
+}
+
+export function canvasUnitsPerClientPixel(rect: CanvasRect, viewBox: CanvasViewBox) {
+  return 1 / clientToCanvasScale(rect, viewBox);
+}
+
 export function canvasPointFromClient(
   clientX: number,
   clientY: number,
   rect: CanvasRect,
   viewBox: CanvasViewBox,
 ): Point {
+  const scale = clientToCanvasScale(rect, viewBox);
+  const renderedWidth = viewBox.width * scale;
+  const renderedHeight = viewBox.height * scale;
+  const offsetX = rect.left + (rect.width - renderedWidth) / 2;
+  const offsetY = rect.top + (rect.height - renderedHeight) / 2;
   return {
-    x: viewBox.x + ((clientX - rect.left) / rect.width) * viewBox.width,
-    y: viewBox.y + ((clientY - rect.top) / rect.height) * viewBox.height,
+    x: viewBox.x + (clientX - offsetX) / scale,
+    y: viewBox.y + (clientY - offsetY) / scale,
+  };
+}
+
+export function canvasDeltaFromClient(
+  startClient: Point,
+  currentClient: Point,
+  rect: CanvasRect,
+  viewBox: CanvasViewBox,
+): Point {
+  const scale = clientToCanvasScale(rect, viewBox);
+  return {
+    x: (currentClient.x - startClient.x) / scale,
+    y: (currentClient.y - startClient.y) / scale,
   };
 }
 
@@ -33,12 +61,11 @@ export function transformAfterCanvasDrag(
   rect: CanvasRect,
   viewBox: CanvasViewBox,
 ): DrawingTransform {
-  const deltaX = ((currentClient.x - startClient.x) / rect.width) * viewBox.width;
-  const deltaSvgY = ((currentClient.y - startClient.y) / rect.height) * viewBox.height;
+  const delta = canvasDeltaFromClient(startClient, currentClient, rect, viewBox);
   return {
     ...start,
-    x: start.x + deltaX,
-    y: start.y - deltaSvgY,
+    x: start.x + delta.x,
+    y: start.y - delta.y,
   };
 }
 

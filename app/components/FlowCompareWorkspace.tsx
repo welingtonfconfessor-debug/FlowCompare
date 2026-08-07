@@ -40,7 +40,9 @@ import {
 } from "react";
 import { alignmentForDocuments, type AlignmentMethod } from "../lib/alignment";
 import {
+  canvasDeltaFromClient,
   canvasPointFromClient,
+  canvasUnitsPerClientPixel,
   measurementDistance,
   snapCanvasPoint,
   transformAfterCanvasDrag,
@@ -440,14 +442,13 @@ export default function FlowCompareWorkspace() {
   const handleWheel = (event: ReactWheelEvent<SVGSVGElement>) => {
     event.preventDefault();
     const rect = event.currentTarget.getBoundingClientRect();
-    const mouseX = viewBox.x + ((event.clientX - rect.left) / rect.width) * viewBox.width;
-    const mouseY = viewBox.y + ((event.clientY - rect.top) / rect.height) * viewBox.height;
+    const mouse = canvasPointFromClient(event.clientX, event.clientY, rect, viewBox);
     const factor = event.deltaY > 0 ? 1.12 : 0.88;
     const width = viewBox.width * factor;
     const height = viewBox.height * factor;
     setViewBox({
-      x: mouseX - ((mouseX - viewBox.x) / viewBox.width) * width,
-      y: mouseY - ((mouseY - viewBox.y) / viewBox.height) * height,
+      x: mouse.x - ((mouse.x - viewBox.x) / viewBox.width) * width,
+      y: mouse.y - ((mouse.y - viewBox.y) / viewBox.height) * height,
       width,
       height,
     });
@@ -456,7 +457,7 @@ export default function FlowCompareWorkspace() {
   const measurementPoint = (event: ReactPointerEvent<SVGSVGElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
     const point = canvasPointFromClient(event.clientX, event.clientY, rect, viewBox);
-    const snapDistance = Math.max(viewBox.width, viewBox.height) / 100;
+    const snapDistance = canvasUnitsPerClientPixel(rect, viewBox) * 8;
     return snapCanvasPoint(point, measurementSegments, snapDistance);
   };
 
@@ -525,10 +526,16 @@ export default function FlowCompareWorkspace() {
     const start = panRef.current;
     if (!start) return;
     const rect = event.currentTarget.getBoundingClientRect();
+    const delta = canvasDeltaFromClient(
+      { x: start.x, y: start.y },
+      { x: event.clientX, y: event.clientY },
+      rect,
+      start.viewBox,
+    );
     setViewBox({
       ...start.viewBox,
-      x: start.viewBox.x - ((event.clientX - start.x) / rect.width) * start.viewBox.width,
-      y: start.viewBox.y - ((event.clientY - start.y) / rect.height) * start.viewBox.height,
+      x: start.viewBox.x - delta.x,
+      y: start.viewBox.y - delta.y,
     });
   };
 
