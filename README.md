@@ -1,55 +1,82 @@
 # FlowCompare
 
-FlowCompare é uma base web para importar, sobrepor e comparar dois arquivos DXF. A interface segue uma linguagem escura de desenho técnico e mantém os cálculos separados da apresentação.
+FlowCompare e um aplicativo PHP para importar, sobrepor e comparar dois arquivos DXF. O PHP entrega a pagina e os assets compilados; o motor CAD roda no navegador para manter zoom, medicao e analise geometrica responsivos.
 
-## Estrutura
+## Arquitetura
 
-- `app/components/FlowCompareWorkspace.tsx`: área de trabalho, importação, controles e visualização SVG.
-- `app/lib/dxf.ts`: leitura do arquivo DXF e normalização das unidades para milímetros.
-- `app/lib/geometry.ts`: conversão de entidades em segmentos, limites, medidas e transformações.
-- `app/lib/comparison.ts`: comparação geométrica, tolerância, classificação e similaridade.
-- `app/types.ts`: contratos compartilhados do domínio.
-- `tests/geometry-comparison.test.ts`: testes com geometria DXF real, sem resultados fixos na interface.
+- `public/index.php`: entrada HTTP e document root seguro da aplicacao.
+- `php/AssetManifest.php`: leitura segura do manifesto gerado pelo Vite.
+- `frontend/main.tsx`: montagem do frontend no HTML entregue pelo PHP.
+- `app/components/FlowCompareWorkspace.tsx`: area de trabalho e controles.
+- `app/lib/dxf.ts`: leitura do DXF e normalizacao para milimetros.
+- `app/lib/geometry.ts`: segmentos, limites, medidas e transformacoes.
+- `app/lib/comparison.ts`: tolerancia, classificacao e similaridade.
+- `app/lib/report.ts`: relatorio PDF com logo, imagem e divergencias reais.
+- `public/build`: frontend compilado que o PHP serve em producao.
 
-## Funcionalidades atuais
+## Requisitos
 
-- Importação individual ou por arrastar e soltar de dois DXFs.
-- Visualização sobreposta com cores independentes para A e B.
-- Zoom pelo mouse, movimentação e ajuste à tela.
-- Alinhamento automático pelos limites ou pela origem.
-- Ajuste manual de X, Y e rotação.
-- Tolerância em milímetros e classificação em correto, pequena diferença e grande diferença.
-- Destaque no desenho e lista lateral gerados pela geometria importada.
-- Métricas de largura, comprimento, extensão geométrica, furos, recortes, contornos e camadas de dobra.
-- Filtro para mostrar somente diferenças e opção de ignorar geometrias internas.
-- Exportação da comparação em PNG.
-- Relatório PDF com arquivos, tolerância, alinhamento, métricas, imagem da sobreposição e divergências classificadas.
+- PHP 8.2 ou superior.
+- Node.js 22.13 ou superior apenas para compilar o frontend.
+- pnpm 11.
 
-## Entidades DXF suportadas
+O servidor de producao precisa apenas de PHP e dos arquivos ja compilados em `public/build`.
 
-`LINE`, `LWPOLYLINE`, `POLYLINE`, `CIRCLE`, `ARC`, `ELLIPSE` e `SPLINE`. Curvas são discretizadas em segmentos para renderização e comparação.
+## Execucao local
 
-Linhas em camadas cujo nome contém `BEND`, `FOLD`, `DOBRA` ou `VINCO` já são identificadas separadamente, preparando a comparação específica de dobras.
-
-## Próximas extensões
-
-- Emparelhamento topológico avançado entre entidades equivalentes.
-- Alinhamento por pontos, furos ou contorno com estimativa automática de rotação.
-- Comparação dedicada de linhas de dobra.
-- Assinatura e histórico de versões dos relatórios PDF.
-
-## Execução
+Instale e compile os assets:
 
 ```powershell
 pnpm install
+pnpm build
+```
+
+Inicie o PHP:
+
+```powershell
+php -S 127.0.0.1:8000 -t public
+```
+
+Acesse `http://127.0.0.1:8000/`.
+
+Para desenvolvimento com atualizacao instantanea, execute o Vite em um terminal:
+
+```powershell
 pnpm dev
 ```
 
-Testes e validação:
+E inicie o PHP em outro terminal informando o servidor do Vite:
+
+```powershell
+$env:FLOWCOMPARE_VITE_DEV_SERVER="http://127.0.0.1:5173"
+php -S 127.0.0.1:8000 -t public
+```
+
+## Validacao
 
 ```powershell
 pnpm test:geometry
+pnpm test:alignment
+pnpm test:canvas-tools
 pnpm test:report
 pnpm test
 pnpm lint
 ```
+
+## Funcionalidades
+
+- Importacao de dois DXFs por seletor ou arrastar e soltar.
+- Sobreposicao com cores independentes para Referencia A e Arquivo B.
+- Zoom, navegacao, enquadramento e arraste do Arquivo B.
+- Alinhamento automatico e ajustes manuais de X, Y e rotacao.
+- Tolerancia em milimetros e classificacao das divergencias.
+- Comparacao de dimensoes, contornos, furos, recortes e linhas de dobra.
+- Regua com captura em linhas, extremidades e intersecoes do Arquivo B.
+- Filtro para mostrar apenas diferencas.
+- Exportacao PNG e relatorio PDF com os resultados reais.
+
+## Entidades DXF suportadas
+
+`LINE`, `LWPOLYLINE`, `POLYLINE`, `CIRCLE`, `ARC`, `ELLIPSE` e `SPLINE`.
+
+Camadas contendo `BEND`, `FOLD`, `DOBRA` ou `VINCO` sao identificadas separadamente para a futura comparacao dedicada de dobras.

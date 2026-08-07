@@ -1,5 +1,3 @@
-"use client";
-
 import {
   AlignCenter,
   Check,
@@ -633,7 +631,7 @@ export default function FlowCompareWorkspace() {
     <main className="flow-app">
       <header className="topbar">
         <div className="brand">
-          <span className="brand-logo" role="img" aria-label="FlowCompare" />
+          <img className="brand-logo" src="/flowcompare-logo-dark.svg" alt="FlowCompare" />
           <span className="brand-subtitle">Comparador DXF</span>
         </div>
         <nav className="top-actions" aria-label="Ações do projeto">

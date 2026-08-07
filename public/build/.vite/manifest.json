@@ -1,0 +1,58 @@
+{
+  "_typeof-mVVFPGHC.js": {
+    "file": "assets/typeof-mVVFPGHC.js",
+    "name": "typeof"
+  },
+  "app/lib/report.ts": {
+    "file": "assets/report-0PgHal-4.js",
+    "name": "report",
+    "src": "app/lib/report.ts",
+    "isDynamicEntry": true,
+    "imports": [
+      "frontend/main.tsx",
+      "_typeof-mVVFPGHC.js"
+    ],
+    "dynamicImports": [
+      "node_modules/.pnpm/html2canvas@1.4.1/node_modules/html2canvas/dist/html2canvas.js",
+      "node_modules/.pnpm/dompurify@3.4.13/node_modules/dompurify/dist/purify.es.mjs",
+      "node_modules/.pnpm/canvg@3.0.11/node_modules/canvg/lib/index.es.js"
+    ]
+  },
+  "frontend/main.tsx": {
+    "file": "assets/main-CLZo4yc9.js",
+    "name": "main",
+    "src": "frontend/main.tsx",
+    "isEntry": true,
+    "dynamicImports": [
+      "app/lib/report.ts"
+    ],
+    "css": [
+      "assets/main-6swO-PNf.css"
+    ]
+  },
+  "node_modules/.pnpm/canvg@3.0.11/node_modules/canvg/lib/index.es.js": {
+    "file": "assets/index.es-WjHldZ09.js",
+    "name": "index.es",
+    "src": "node_modules/.pnpm/canvg@3.0.11/node_modules/canvg/lib/index.es.js",
+    "isDynamicEntry": true,
+    "imports": [
+      "frontend/main.tsx",
+      "_typeof-mVVFPGHC.js"
+    ]
+  },
+  "node_modules/.pnpm/dompurify@3.4.13/node_modules/dompurify/dist/purify.es.mjs": {
+    "file": "assets/purify.es-CmpF0Uvi.js",
+    "name": "purify.es",
+    "src": "node_modules/.pnpm/dompurify@3.4.13/node_modules/dompurify/dist/purify.es.mjs",
+    "isDynamicEntry": true
+  },
+  "node_modules/.pnpm/html2canvas@1.4.1/node_modules/html2canvas/dist/html2canvas.js": {
+    "file": "assets/html2canvas-vigV979J.js",
+    "name": "html2canvas",
+    "src": "node_modules/.pnpm/html2canvas@1.4.1/node_modules/html2canvas/dist/html2canvas.js",
+    "isDynamicEntry": true,
+    "imports": [
+      "frontend/main.tsx"
+    ]
+  }
+}

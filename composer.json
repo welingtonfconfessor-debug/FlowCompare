@@ -1,0 +1,13 @@
+{
+  "name": "flowcompare/app",
+  "description": "Comparador visual de arquivos DXF servido por PHP.",
+  "type": "project",
+  "require": {
+    "php": "^8.2"
+  },
+  "autoload": {
+    "psr-4": {
+      "FlowCompare\\": "php/"
+    }
+  }
+}
