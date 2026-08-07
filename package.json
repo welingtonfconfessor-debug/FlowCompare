@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:sites": "vite build && node scripts/build-sites.mjs",
     "start": "php -S 127.0.0.1:8000 -t public",
     "test": "vite build && php tests/php-entry.test.php && node --test tests/rendered-html.test.mjs",
     "test:php": "php tests/php-entry.test.php",
