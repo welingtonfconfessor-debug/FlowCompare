@@ -76,6 +76,10 @@ export type Difference = {
   signedValue: number;
   bounds: Bounds;
   source: "A" | "B" | "metric";
+  entityIds?: {
+    A: string[];
+    B: string[];
+  };
 };
 
 export type ComparisonResult = {
@@ -87,4 +91,5 @@ export type ComparisonResult = {
   large: number;
   maxDifference: number;
   transformedB: Segment[];
+  alignedStatsB: GeometryStats;
 };

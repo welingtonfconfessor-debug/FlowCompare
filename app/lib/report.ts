@@ -348,8 +348,8 @@ export function createComparisonReportPdf(input: ComparisonReportInput) {
 
   sectionTitle(pdf, "Resumo geométrico", cursorY);
   const geometryRows: Array<[string, number, number, boolean]> = [
-    ["Largura total", documentA.stats.width, documentB.stats.width, false],
-    ["Comprimento total", documentA.stats.height, documentB.stats.height, false],
+    ["Largura total", documentA.stats.width, comparison.alignedStatsB.width, false],
+    ["Comprimento total", documentA.stats.height, comparison.alignedStatsB.height, false],
     ["Comprimento de geometria", documentA.stats.totalLength, documentB.stats.totalLength, false],
     ["Furos", documentA.stats.holes, documentB.stats.holes, true],
     ["Recortes", documentA.stats.cutouts, documentB.stats.cutouts, true],

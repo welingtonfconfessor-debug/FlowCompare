@@ -12,6 +12,15 @@ export type RawEntity = Record<string, unknown> & {
   layer?: string;
 };
 
+export type GeometryComponent = {
+  id: string;
+  entityIds: string[];
+  segments: Segment[];
+  bounds: Bounds;
+  closed: boolean;
+  length: number;
+};
+
 const EMPTY_BOUNDS: Bounds = { minX: 0, minY: 0, maxX: 0, maxY: 0 };
 const BEND_LAYER = /(bend|fold|dobra|vinco)/i;
 
@@ -295,16 +304,123 @@ export function transformBounds(bounds: Bounds, transform: DrawingTransform): Bo
   };
 }
 
+function pointBucket(point: Point, tolerance: number) {
+  return {
+    x: Math.floor(point.x / tolerance),
+    y: Math.floor(point.y / tolerance),
+  };
+}
+
+function bucketKey(x: number, y: number) {
+  return `${x}:${y}`;
+}
+
+function forNearbyBuckets(point: Point, tolerance: number, callback: (key: string) => void) {
+  const bucket = pointBucket(point, tolerance);
+  for (let offsetX = -1; offsetX <= 1; offsetX += 1) {
+    for (let offsetY = -1; offsetY <= 1; offsetY += 1) {
+      callback(bucketKey(bucket.x + offsetX, bucket.y + offsetY));
+    }
+  }
+}
+
+function componentIsClosed(segments: Segment[], tolerance: number) {
+  if (segments.length < 3) return false;
+  const buckets = new Map<string, Array<{ point: Point; degree: number }>>();
+  const nodes: Array<{ point: Point; degree: number }> = [];
+
+  for (const segment of segments) {
+    for (const point of [segment.a, segment.b]) {
+      let match: { point: Point; degree: number } | undefined;
+      forNearbyBuckets(point, tolerance, (key) => {
+        if (match) return;
+        match = buckets
+          .get(key)
+          ?.find((node) => Math.hypot(node.point.x - point.x, node.point.y - point.y) <= tolerance);
+      });
+      if (match) {
+        match.degree += 1;
+        continue;
+      }
+      const node = { point, degree: 1 };
+      nodes.push(node);
+      const bucket = pointBucket(point, tolerance);
+      const key = bucketKey(bucket.x, bucket.y);
+      buckets.set(key, [...(buckets.get(key) ?? []), node]);
+    }
+  }
+
+  return nodes.length >= 3 && nodes.every((node) => node.degree % 2 === 0);
+}
+
+export function connectedGeometryComponents(
+  entities: EntityGeometry[],
+  connectionTolerance = 0.01,
+): GeometryComponent[] {
+  if (!entities.length) return [];
+  const tolerance = Math.max(connectionTolerance, 0.000001);
+  const parent = entities.map((_, index) => index);
+  const find = (index: number): number => {
+    if (parent[index] !== index) parent[index] = find(parent[index]);
+    return parent[index];
+  };
+  const unite = (first: number, second: number) => {
+    const firstRoot = find(first);
+    const secondRoot = find(second);
+    if (firstRoot !== secondRoot) parent[secondRoot] = firstRoot;
+  };
+  const endpointBuckets = new Map<string, Array<{ point: Point; entityIndex: number }>>();
+
+  entities.forEach((entity, entityIndex) => {
+    entity.segments.forEach((segment) => {
+      for (const point of [segment.a, segment.b]) {
+        forNearbyBuckets(point, tolerance, (key) => {
+          endpointBuckets.get(key)?.forEach((candidate) => {
+            if (Math.hypot(candidate.point.x - point.x, candidate.point.y - point.y) <= tolerance) {
+              unite(entityIndex, candidate.entityIndex);
+            }
+          });
+        });
+        const bucket = pointBucket(point, tolerance);
+        const key = bucketKey(bucket.x, bucket.y);
+        endpointBuckets.set(key, [
+          ...(endpointBuckets.get(key) ?? []),
+          { point, entityIndex },
+        ]);
+      }
+    });
+  });
+
+  const groups = new Map<number, EntityGeometry[]>();
+  entities.forEach((entity, index) => {
+    const root = find(index);
+    groups.set(root, [...(groups.get(root) ?? []), entity]);
+  });
+
+  return Array.from(groups.values()).map((group, index) => {
+    const segments = group.flatMap((entity) => entity.segments);
+    return {
+      id: `component-${index}`,
+      entityIds: group.map((entity) => entity.id),
+      segments,
+      bounds: boundsFromSegments(segments),
+      closed: componentIsClosed(segments, tolerance),
+      length: segments.reduce((sum, segment) => sum + segmentLength(segment), 0),
+    };
+  });
+}
+
 export function geometryStats(entities: EntityGeometry[], bounds: Bounds): GeometryStats {
-  const closed = entities.filter((entity) => entity.closed);
-  const largestClosedArea = Math.max(0, ...closed.map((entity) => entity.area));
+  const contourComponents = connectedGeometryComponents(
+    entities.filter((entity) => !entity.isBend && entity.type !== "CIRCLE"),
+  ).filter((component) => component.closed);
   return {
     totalLength: entities.reduce((sum, entity) => sum + entity.length, 0),
     width: Math.max(0, bounds.maxX - bounds.minX),
     height: Math.max(0, bounds.maxY - bounds.minY),
     holes: entities.filter((entity) => entity.type === "CIRCLE").length,
-    cutouts: closed.filter((entity) => entity.area < largestClosedArea * 0.95).length,
-    contours: closed.length,
+    cutouts: Math.max(0, contourComponents.length - 1),
+    contours: contourComponents.length,
     bends: entities.filter((entity) => entity.isBend).length,
   };
 }
@@ -328,7 +444,7 @@ export function sampleSegments(segments: Segment[], step: number) {
   const points: Point[] = [];
   for (const segment of segments) {
     const length = segmentLength(segment);
-    const count = Math.max(1, Math.min(20, Math.ceil(length / Math.max(step, 0.1))));
+    const count = Math.max(1, Math.min(500, Math.ceil(length / Math.max(step, 0.1))));
     for (let index = 0; index <= count; index += 1) {
       const ratio = index / count;
       points.push({

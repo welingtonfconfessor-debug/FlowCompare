@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { alignmentForDocuments } from "../app/lib/alignment";
 import { compareDocuments } from "../app/lib/comparison";
 import { parseDxfText } from "../app/lib/dxf";
 
@@ -70,6 +71,70 @@ ENDSEC
 EOF`;
 }
 
+function rectangleFromLinesDxf(width: number, height: number) {
+  const lines = [
+    [0, 0, width, 0],
+    [width, 0, width, height],
+    [width, height, 0, height],
+    [0, height, 0, 0],
+  ];
+  return `0
+SECTION
+2
+ENTITIES
+${lines.map(([x1, y1, x2, y2]) => `0
+LINE
+8
+CONTORNO
+10
+${x1}
+20
+${y1}
+11
+${x2}
+21
+${y2}`).join("\n")}
+0
+ENDSEC
+0
+EOF`;
+}
+
+function rectangleFromPolylineDxf(width: number, height: number) {
+  return `0
+SECTION
+2
+ENTITIES
+0
+LWPOLYLINE
+8
+CONTORNO
+90
+4
+70
+1
+10
+0
+20
+0
+10
+${width}
+20
+0
+10
+${width}
+20
+${height}
+10
+0
+20
+${height}
+0
+ENDSEC
+0
+EOF`;
+}
+
 test("lê geometrias e estatísticas reais do DXF", () => {
   const document = parseDxfText(trayDxf(100, 20), "bandeja-a.dxf");
   assert.equal(document.stats.width, 100);
@@ -106,4 +171,51 @@ test("desenhos idênticos recebem similaridade total", () => {
   assert.equal(result.similarity, 100);
   assert.equal(result.large, 0);
   assert.equal(result.small, 0);
+});
+
+test("trata linhas conectadas e polilinha como o mesmo contorno após rotação", () => {
+  const documentA = parseDxfText(rectangleFromLinesDxf(100, 50), "linhas.dxf");
+  const documentB = parseDxfText(rectangleFromPolylineDxf(50, 100), "polilinha.dxf");
+  const transform = alignmentForDocuments(documentA, documentB, "origin", 90);
+  const result = compareDocuments(
+    documentA,
+    documentB,
+    transform,
+    { tolerance: 0.2, ignoreInternal: false },
+  );
+
+  assert.equal(documentA.stats.contours, 1);
+  assert.equal(documentB.stats.contours, 1);
+  assert.equal(result.totalCompared, 7);
+  assert.equal(result.correct, 7);
+  assert.equal(result.small, 0);
+  assert.equal(result.large, 0);
+  assert.equal(result.similarity, 100);
+  assert.ok(Math.abs(result.alignedStatsB.width - 100) < 1e-9);
+  assert.ok(Math.abs(result.alignedStatsB.height - 50) < 1e-9);
+});
+
+test("reporta uma única divergência de contorno sem inverter largura e comprimento", () => {
+  const documentA = parseDxfText(rectangleFromLinesDxf(100, 50), "referencia.dxf");
+  const documentB = parseDxfText(rectangleFromPolylineDxf(50, 100.4), "comparado.dxf");
+  const transform = alignmentForDocuments(documentA, documentB, "origin", 90);
+  const result = compareDocuments(
+    documentA,
+    documentB,
+    transform,
+    { tolerance: 0.201, ignoreInternal: false },
+  );
+
+  const width = result.differences.find((difference) => difference.id === "metric-width");
+  const height = result.differences.find((difference) => difference.id === "metric-height");
+  const contours = result.differences.filter((difference) => difference.label === "Contorno externo");
+
+  assert.ok(width && Math.abs(width.signedValue - 0.4) < 1e-9);
+  assert.ok(height && Math.abs(height.signedValue) < 1e-9);
+  assert.equal(contours.length, 1);
+  assert.equal(result.totalCompared, 7);
+  assert.equal(result.small, 3);
+  assert.equal(result.large, 0);
+  assert.ok(result.maxDifference < 1);
+  assert.ok(result.similarity > 95);
 });

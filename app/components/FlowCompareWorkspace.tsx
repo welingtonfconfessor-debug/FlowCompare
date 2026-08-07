@@ -308,6 +308,8 @@ export default function FlowCompareWorkspace() {
     const idsB = new Set<string>();
     comparison?.differences.forEach((difference) => {
       if (difference.severity === "correct") return;
+      difference.entityIds?.A.forEach((id) => idsA.add(id));
+      difference.entityIds?.B.forEach((id) => idsB.add(id));
       if (difference.id.startsWith("A-")) idsA.add(difference.id.slice(2));
       if (difference.id.startsWith("B-")) idsB.add(difference.id.slice(2));
     });
@@ -886,8 +888,8 @@ export default function FlowCompareWorkspace() {
           <section className="panel-section geometry-section">
             <div className="section-title"><SlidersHorizontal size={15} /><h2>Geometria dos arquivos</h2></div>
             <div className="geometry-head"><span>Métrica</span><b>A</b><b>B</b></div>
-            <GeometryRow label="Largura" a={documentA?.stats.width} b={documentB?.stats.width} suffix="mm" />
-            <GeometryRow label="Comprimento" a={documentA?.stats.height} b={documentB?.stats.height} suffix="mm" />
+            <GeometryRow label="Largura" a={documentA?.stats.width} b={comparison?.alignedStatsB.width ?? documentB?.stats.width} suffix="mm" />
+            <GeometryRow label="Comprimento" a={documentA?.stats.height} b={comparison?.alignedStatsB.height ?? documentB?.stats.height} suffix="mm" />
             <GeometryRow label="Geometria total" a={documentA?.stats.totalLength} b={documentB?.stats.totalLength} suffix="mm" />
             <GeometryRow label="Furos" a={documentA?.stats.holes} b={documentB?.stats.holes} />
             <GeometryRow label="Recortes" a={documentA?.stats.cutouts} b={documentB?.stats.cutouts} />

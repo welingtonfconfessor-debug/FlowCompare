@@ -4,7 +4,7 @@
     "name": "typeof"
   },
   "app/lib/report.ts": {
-    "file": "assets/report-blGNI7Wu.js",
+    "file": "assets/report-XlQZma6S.js",
     "name": "report",
     "src": "app/lib/report.ts",
     "isDynamicEntry": true,
@@ -19,7 +19,7 @@
     ]
   },
   "frontend/main.tsx": {
-    "file": "assets/main-DZ40fcLp.js",
+    "file": "assets/main-DvUqfTKW.js",
     "name": "main",
     "src": "frontend/main.tsx",
     "isEntry": true,
@@ -31,7 +31,7 @@
     ]
   },
   "node_modules/.pnpm/canvg@3.0.11/node_modules/canvg/lib/index.es.js": {
-    "file": "assets/index.es-DjDXRWnM.js",
+    "file": "assets/index.es-DHO0kH7b.js",
     "name": "index.es",
     "src": "node_modules/.pnpm/canvg@3.0.11/node_modules/canvg/lib/index.es.js",
     "isDynamicEntry": true,
@@ -47,7 +47,7 @@
     "isDynamicEntry": true
   },
   "node_modules/.pnpm/html2canvas@1.4.1/node_modules/html2canvas/dist/html2canvas.js": {
-    "file": "assets/html2canvas-B1InXZIy.js",
+    "file": "assets/html2canvas-BUv48yDk.js",
     "name": "html2canvas",
     "src": "node_modules/.pnpm/html2canvas@1.4.1/node_modules/html2canvas/dist/html2canvas.js",
     "isDynamicEntry": true,
