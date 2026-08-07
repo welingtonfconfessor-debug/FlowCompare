@@ -852,7 +852,7 @@ select:focus-visible {
 }
 
 .diff-box {
-  fill: rgba(245, 200, 66, 0.06);
+  fill: rgba(245, 200, 66, 0.018);
   stroke-width: 1;
   stroke-dasharray: 5 4;
 }
@@ -1217,11 +1217,11 @@ select:focus-visible {
 
 @keyframes difference-focus-pulse {
   0% {
-    fill: rgba(76, 147, 255, 0.22);
+    fill: rgba(76, 147, 255, 0.1);
     stroke: #8fc0ff;
   }
   100% {
-    fill: rgba(245, 200, 66, 0.06);
+    fill: rgba(245, 200, 66, 0.018);
   }
 }
 

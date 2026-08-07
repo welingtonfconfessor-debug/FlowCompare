@@ -109,7 +109,7 @@ async function svgToPngDataUrl(svg: SVGSVGElement, width = 1600, height = 1000) 
     .axis-line { stroke: #52616a; stroke-width: .7; stroke-dasharray: 7 6; opacity: .55; }
     .drawing-a { stroke: #ff4d57; fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
     .drawing-b { stroke: #2f7df6; fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
-    .diff-box { stroke: #f5c842; fill: rgba(245,200,66,.08); stroke-width: 1; stroke-dasharray: 6 4; }
+    .diff-box { stroke: #f5c842; fill: rgba(245,200,66,.025); stroke-width: 1; stroke-dasharray: 6 4; }
     .diff-line { stroke: #f5c842; fill: none; stroke-width: 1; }
     .diff-label { fill: #f5c842; font-family: Arial, sans-serif; font-weight: 700; paint-order: stroke; stroke: #071015; stroke-width: 2px; }
     .severity-large .diff-box, .severity-large .diff-line { stroke: #f08a45; }
