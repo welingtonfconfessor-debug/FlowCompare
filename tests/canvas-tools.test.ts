@@ -43,3 +43,24 @@ test("régua encaixa no segmento mais próximo e mede em milímetros", () => {
   assert.equal(snapCanvasPoint({ x: 25, y: 20 }, segments, 5), null);
   assert.equal(measurementDistance({ x: 0, y: 0 }, { x: 3, y: 4 }), 5);
 });
+
+test("régua prioriza a interseção exata sobre a projeção na linha", () => {
+  const segments: Segment[] = [
+    {
+      a: { x: 0, y: 0 },
+      b: { x: 100, y: 0 },
+      entityId: "horizontal",
+      entityType: "LINE",
+      layer: "0",
+    },
+    {
+      a: { x: 50, y: -50 },
+      b: { x: 50, y: 50 },
+      entityId: "vertical",
+      entityType: "LINE",
+      layer: "0",
+    },
+  ];
+
+  assert.deepEqual(snapCanvasPoint({ x: 53, y: 2 }, segments, 6), { x: 50, y: 0 });
+});
