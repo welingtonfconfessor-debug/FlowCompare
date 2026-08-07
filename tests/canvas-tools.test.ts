@@ -40,5 +40,6 @@ test("régua encaixa no segmento mais próximo e mede em milímetros", () => {
   const snapped = snapCanvasPoint({ x: 25, y: 2 }, segments, 5);
 
   assert.deepEqual(snapped, { x: 25, y: 0 });
+  assert.equal(snapCanvasPoint({ x: 25, y: 20 }, segments, 5), null);
   assert.equal(measurementDistance({ x: 0, y: 0 }, { x: 3, y: 4 }), 5);
 });

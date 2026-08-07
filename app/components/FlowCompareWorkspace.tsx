@@ -325,11 +325,8 @@ export default function FlowCompareWorkspace() {
     [onlyDifferences, transformedSegmentsB, differingEntityIds],
   );
   const measurementSegments = useMemo(
-    () => [
-      ...(showA ? displaySegmentsA : []),
-      ...(showB ? displaySegmentsB : []),
-    ],
-    [displaySegmentsA, displaySegmentsB, showA, showB],
+    () => (showB ? displaySegmentsB : []),
+    [displaySegmentsB, showB],
   );
   const measuredDistance = measurement
     ? measurementDistance(measurement.start, measurement.end)
@@ -450,13 +447,17 @@ export default function FlowCompareWorkspace() {
   const measurementPoint = (event: ReactPointerEvent<SVGSVGElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
     const point = canvasPointFromClient(event.clientX, event.clientY, rect, viewBox);
-    const snapDistance = Math.max(viewBox.width, viewBox.height) / 80;
+    const snapDistance = Math.max(viewBox.width, viewBox.height) / 100;
     return snapCanvasPoint(point, measurementSegments, snapDistance);
   };
 
   const startCanvasInteraction = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (canvasTool === "measure") {
       const point = measurementPoint(event);
+      if (!point) {
+        setNotice("Selecione uma linha visível do Arquivo B para medir.");
+        return;
+      }
       if (!measurement || measurement.complete) {
         setMeasurement({ start: point, end: point, complete: false });
         setNotice("");
@@ -488,7 +489,8 @@ export default function FlowCompareWorkspace() {
   const moveCanvasInteraction = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (canvasTool === "measure") {
       if (measurement && !measurement.complete) {
-        setMeasurement({ ...measurement, end: measurementPoint(event) });
+        const point = measurementPoint(event);
+        if (point) setMeasurement({ ...measurement, end: point });
       }
       return;
     }
@@ -803,7 +805,7 @@ export default function FlowCompareWorkspace() {
             <div className="canvas-tools">
               <button className={canvasTool === "pan" ? "active" : ""} type="button" title="Navegar pelo desenho" aria-pressed={canvasTool === "pan"} onClick={() => selectCanvasTool("pan")}><Hand size={17} /></button>
               <button type="button" title="Enquadrar desenhos" onClick={() => { fitView(); setNotice("Visualização ajustada à área dos desenhos."); }}><Focus size={17} /></button>
-              <button className={canvasTool === "measure" ? "active" : ""} type="button" title="Medir entre dois pontos" aria-pressed={canvasTool === "measure"} disabled={!documentA && !documentB} onClick={() => selectCanvasTool("measure")}><Ruler size={17} /></button>
+              <button className={canvasTool === "measure" ? "active" : ""} type="button" title="Medir entre linhas do Arquivo B" aria-pressed={canvasTool === "measure"} disabled={!documentB || !showB} onClick={() => selectCanvasTool("measure")}><Ruler size={17} /></button>
               <button className={canvasTool === "move" ? "active" : ""} type="button" title="Arrastar o Arquivo B" aria-pressed={canvasTool === "move"} disabled={!documentB} onClick={() => selectCanvasTool("move")}><Move size={17} /></button>
             </div>
           </div>

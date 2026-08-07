@@ -46,8 +46,8 @@ export function measurementDistance(start: Point, end: Point) {
   return Math.hypot(end.x - start.x, end.y - start.y);
 }
 
-export function snapCanvasPoint(point: Point, segments: Segment[], maxDistance: number): Point {
-  let closest = point;
+export function snapCanvasPoint(point: Point, segments: Segment[], maxDistance: number): Point | null {
+  let closest: Point | null = null;
   let closestDistance = maxDistance;
 
   for (const segment of segments) {
