@@ -510,8 +510,7 @@ export default function FlowCompareWorkspace() {
     <main className="flow-app">
       <header className="topbar">
         <div className="brand">
-          <span className="brand-mark"><Layers3 size={18} /></span>
-          <strong>FlowCompare</strong>
+          <span className="brand-logo" role="img" aria-label="FlowCompare" />
           <span className="brand-subtitle">Comparador DXF</span>
         </div>
         <nav className="top-actions" aria-label="Ações do projeto">

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 128" role="img" aria-labelledby="title description">
+  <title id="title">FlowCompare</title>
+  <desc id="description">Símbolo hexagonal atravessado por um fluxo azul e o nome FlowCompare.</desc>
+  <defs>
+    <linearGradient id="flow-blue" x1="8" y1="0" x2="472" y2="112" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2382ff"/>
+      <stop offset="0.55" stop-color="#0f5df1"/>
+      <stop offset="1" stop-color="#0b46c9"/>
+    </linearGradient>
+    <linearGradient id="steel" x1="20" y1="8" x2="585" y2="116" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#eef5f8"/>
+      <stop offset="0.5" stop-color="#c7d2d9"/>
+      <stop offset="1" stop-color="#f2f6f8"/>
+    </linearGradient>
+  </defs>
+
+  <path fill="url(#steel)" d="M60 4 116 37v17H91L60 36 27 55v26L8 92V44L60 4Z"/>
+  <path fill="url(#steel)" d="M8 96h25l27 16 36-21V68l20-12v47l-56 33L8 105v-9Z"/>
+  <path fill="url(#flow-blue)" d="M8 82h27c17 0 24-6 35-19 14-17 28-25 50-25h6v20h-8c-15 0-22 4-33 17-15 18-28 27-51 27H8V82Z"/>
+
+  <text x="145" y="92" font-family="Bahnschrift, 'Arial Narrow', 'Roboto Condensed', sans-serif" font-size="76" font-weight="600" letter-spacing="0">
+    <tspan fill="url(#flow-blue)">Flow</tspan><tspan fill="url(#steel)">Compare</tspan>
+  </text>
+</svg>

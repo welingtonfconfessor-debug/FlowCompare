@@ -1,6 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 140">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 140" role="img" aria-labelledby="title description">
+  <title id="title">FlowCompare</title>
+  <desc id="description">Símbolo hexagonal atravessado por um fluxo azul.</desc>
   <defs>
-    <linearGradient id="blue" x1="8" y1="0" x2="126" y2="120" gradientUnits="userSpaceOnUse">
+    <linearGradient id="flow-blue" x1="8" y1="0" x2="126" y2="120" gradientUnits="userSpaceOnUse">
       <stop stop-color="#2382ff"/>
       <stop offset="0.55" stop-color="#0f5df1"/>
       <stop offset="1" stop-color="#0b46c9"/>
@@ -13,5 +15,5 @@
   </defs>
   <path fill="url(#steel)" d="M60 4 116 37v17H91L60 36 27 55v26L8 92V44L60 4Z"/>
   <path fill="url(#steel)" d="M8 96h25l27 16 36-21V68l20-12v47l-56 33L8 105v-9Z"/>
-  <path fill="url(#blue)" d="M8 82h27c17 0 24-6 35-19 14-17 28-25 50-25h6v20h-8c-15 0-22 4-33 17-15 18-28 27-51 27H8V82Z"/>
+  <path fill="url(#flow-blue)" d="M8 82h27c17 0 24-6 35-19 14-17 28-25 50-25h6v20h-8c-15 0-22 4-33 17-15 18-28 27-51 27H8V82Z"/>
 </svg>
