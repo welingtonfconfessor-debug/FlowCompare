@@ -47,7 +47,7 @@ import {
 } from "../lib/canvas-tools";
 import { compareDocuments } from "../lib/comparison";
 import { parseDxfFile } from "../lib/dxf";
-import { transformBounds, unionBounds } from "../lib/geometry";
+import { transformBounds, transformSegment, unionBounds } from "../lib/geometry";
 import type {
   Bounds,
   Difference,
@@ -274,6 +274,7 @@ export default function FlowCompareWorkspace() {
   const [baseViewBox, setBaseViewBox] = useState<SvgViewBox>(EMPTY_VIEWBOX);
   const [canvasTool, setCanvasTool] = useState<CanvasTool>("pan");
   const [measurement, setMeasurement] = useState<Measurement | null>(null);
+  const [snapCandidate, setSnapCandidate] = useState<Point | null>(null);
   const [isPanning, setIsPanning] = useState(false);
   const [isMovingDrawing, setIsMovingDrawing] = useState(false);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
@@ -325,8 +326,13 @@ export default function FlowCompareWorkspace() {
     [onlyDifferences, transformedSegmentsB, differingEntityIds],
   );
   const measurementSegments = useMemo(
-    () => (showB ? displaySegmentsB : []),
-    [displaySegmentsB, showB],
+    () =>
+      showB
+        ? documentB?.entities
+            .flatMap((entity) => entity.segments)
+            .map((segment) => transformSegment(segment, transform)) ?? []
+        : [],
+    [documentB, showB, transform],
   );
   const measuredDistance = measurement
     ? measurementDistance(measurement.start, measurement.end)
@@ -351,6 +357,7 @@ export default function FlowCompareWorkspace() {
     setViewBox(fitted);
     setBaseViewBox(fitted);
     setMeasurement(null);
+    setSnapCandidate(null);
     setNotice(`Desenhos realinhados mantendo a rotação de ${formatNumber(next.rotation, 1)}°.`);
   }, [alignmentMethod, documentA, documentB, transform.rotation]);
 
@@ -374,6 +381,7 @@ export default function FlowCompareWorkspace() {
       setViewBox(fitted);
       setBaseViewBox(fitted);
       setMeasurement(null);
+      setSnapCandidate(null);
       setNotice(`${file.name} carregado com sucesso.`);
     } catch (fileError) {
       setError(fileError instanceof Error ? fileError.message : "Não foi possível ler este DXF.");
@@ -401,6 +409,7 @@ export default function FlowCompareWorkspace() {
     setNotice("");
     setCanvasTool("pan");
     setMeasurement(null);
+    setSnapCandidate(null);
     setViewBox(EMPTY_VIEWBOX);
     setBaseViewBox(EMPTY_VIEWBOX);
   };
@@ -454,8 +463,9 @@ export default function FlowCompareWorkspace() {
   const startCanvasInteraction = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (canvasTool === "measure") {
       const point = measurementPoint(event);
+      setSnapCandidate(point);
       if (!point) {
-        setNotice("Selecione uma linha visível do Arquivo B para medir.");
+        setNotice("Aproxime o cursor de uma geometria do Arquivo B para medir.");
         return;
       }
       if (!measurement || measurement.complete) {
@@ -488,8 +498,9 @@ export default function FlowCompareWorkspace() {
 
   const moveCanvasInteraction = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (canvasTool === "measure") {
+      const point = measurementPoint(event);
+      setSnapCandidate(point);
       if (measurement && !measurement.complete) {
-        const point = measurementPoint(event);
         if (point) setMeasurement({ ...measurement, end: point });
       }
       return;
@@ -537,6 +548,7 @@ export default function FlowCompareWorkspace() {
     setIsPanning(false);
     setIsMovingDrawing(false);
     setCanvasTool(tool);
+    setSnapCandidate(null);
     if (tool === "measure" || tool === "move") setMeasurement(null);
   };
 
@@ -744,6 +756,9 @@ export default function FlowCompareWorkspace() {
               onPointerMove={moveCanvasInteraction}
               onPointerUp={endCanvasInteraction}
               onPointerCancel={endCanvasInteraction}
+              onPointerLeave={() => {
+                if (canvasTool === "measure") setSnapCandidate(null);
+              }}
               aria-label="Área de comparação dos desenhos DXF"
             >
               <defs>
@@ -787,6 +802,14 @@ export default function FlowCompareWorkspace() {
                     {`${formatNumber(measuredDistance)} mm`}
                   </text>
                 </g>
+              ) : null}
+              {canvasTool === "measure" && snapCandidate ? (
+                <circle
+                  className="snap-candidate"
+                  cx={snapCandidate.x}
+                  cy={snapCandidate.y}
+                  r={measurementLabelSize * 0.4}
+                />
               ) : null}
             </svg>
 

@@ -883,6 +883,14 @@ select:focus-visible {
   opacity: 0.78;
 }
 
+.snap-candidate {
+  fill: rgba(47, 125, 246, 0.2);
+  stroke: #73aaff;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
 .empty-stage {
   position: absolute;
   inset: 0;
