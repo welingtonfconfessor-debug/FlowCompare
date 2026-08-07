@@ -5,6 +5,9 @@ import { compareDocuments } from "../app/lib/comparison";
 import { parseDxfText } from "../app/lib/dxf";
 import { createComparisonReportPdf } from "../app/lib/report";
 
+const ONE_PIXEL_PNG =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+
 function reportFixtureDxf(width: number, holeX: number) {
   return `0
 SECTION
@@ -97,4 +100,26 @@ test("gera um relatório PDF com as divergências calculadas", async () => {
   const outputDirectory = new URL("../output/pdf/", import.meta.url);
   await mkdir(outputDirectory, { recursive: true });
   await writeFile(new URL("flowcompare-relatorio-exemplo.pdf", outputDirectory), bytes);
+});
+
+test("reserva uma página paisagem ampliada para a comparação", () => {
+  const documentA = parseDxfText(reportFixtureDxf(100, 20), "referencia-a.dxf");
+  const documentB = parseDxfText(reportFixtureDxf(102, 21), "arquivo-b.dxf");
+  const transform = { x: -1, y: 0, rotation: 0 };
+  const comparison = compareDocuments(documentA, documentB, transform, {
+    tolerance: 0.2,
+    ignoreInternal: false,
+  });
+  const pdf = createComparisonReportPdf({
+    documentA,
+    documentB,
+    comparison,
+    tolerance: 0.2,
+    transform,
+    comparisonImage: ONE_PIXEL_PNG,
+  });
+
+  pdf.setPage(1);
+  assert.ok(pdf.internal.pageSize.getWidth() > pdf.internal.pageSize.getHeight());
+  assert.ok(pdf.getNumberOfPages() >= 2);
 });

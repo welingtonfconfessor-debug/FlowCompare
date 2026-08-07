@@ -126,24 +126,119 @@ function addPageFooters(pdf: jsPDF, generatedAt: Date) {
   const totalPages = pdf.getNumberOfPages();
   for (let page = 1; page <= totalPages; page += 1) {
     pdf.setPage(page);
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const footerLineY = pageHeight - 11;
+    const footerTextY = pageHeight - 6;
     pdf.setDrawColor(...COLORS.line);
-    pdf.line(14, 286, 196, 286);
+    pdf.line(14, footerLineY, pageWidth - 14, footerLineY);
     pdf.setTextColor(...COLORS.muted);
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(7);
-    pdf.text("FlowCompare | Relatório de divergências DXF", 14, 291);
+    pdf.text("FlowCompare | Relatório de divergências DXF", 14, footerTextY);
     pdf.text(
       `Gerado em ${generatedAt.toLocaleString("pt-BR")} | Página ${page} de ${totalPages}`,
-      196,
-      291,
+      pageWidth - 14,
+      footerTextY,
       { align: "right" },
     );
   }
 }
 
+function addComparisonPreviewPage(
+  pdf: jsPDF,
+  input: ComparisonReportInput,
+  actionableCount: number,
+) {
+  if (!input.comparisonImage) return;
+
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const statusColor =
+    input.comparison.large > 0
+      ? COLORS.red
+      : actionableCount > 0
+        ? COLORS.yellow
+        : COLORS.green;
+
+  pdf.setFillColor(...COLORS.dark);
+  pdf.rect(0, 0, pageWidth, 24, "F");
+  pdf.setFillColor(...COLORS.blue);
+  pdf.roundedRect(14, 5, 14, 14, 2, 2, "F");
+  pdf.setTextColor(255, 255, 255);
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(10);
+  pdf.text("FC", 21, 14, { align: "center" });
+  pdf.setFontSize(15);
+  pdf.text("FlowCompare", 34, 11.5);
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(8.5);
+  pdf.setTextColor(177, 191, 198);
+  pdf.text("Visualização ampliada da comparação", 34, 17);
+  pdf.setTextColor(255, 255, 255);
+  pdf.setFontSize(8);
+  pdf.text(`${input.documentA.name}  x  ${input.documentB.name}`, pageWidth - 14, 14, {
+    align: "right",
+    maxWidth: 132,
+  });
+
+  pdf.setFillColor(...statusColor);
+  pdf.roundedRect(14, 29, pageWidth - 28, 10, 1.5, 1.5, "F");
+  pdf.setTextColor(255, 255, 255);
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(8.5);
+  pdf.text(
+    actionableCount > 0
+      ? `${actionableCount} DIVERGÊNCIA(S) ACIMA DA TOLERÂNCIA`
+      : "NENHUMA DIVERGÊNCIA ACIMA DA TOLERÂNCIA",
+    19,
+    35.5,
+  );
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(7.5);
+  pdf.text(
+    `Similaridade ${formatNumber(input.comparison.similarity, 1)}% | Tolerância ${formatNumber(input.tolerance)} mm | Máxima ${formatNumber(input.comparison.maxDifference)} mm`,
+    pageWidth - 19,
+    35.5,
+    { align: "right" },
+  );
+
+  const frameX = 14;
+  const frameY = 44;
+  const frameWidth = pageWidth - 28;
+  const frameHeight = pageHeight - frameY - 21;
+  const imagePadding = 4;
+  const maxImageWidth = frameWidth - imagePadding * 2;
+  const maxImageHeight = frameHeight - imagePadding * 2;
+  const properties = pdf.getImageProperties(input.comparisonImage);
+  const ratio = properties.width > 0 && properties.height > 0 ? properties.width / properties.height : 1.75;
+  let imageWidth = maxImageWidth;
+  let imageHeight = imageWidth / ratio;
+
+  if (imageHeight > maxImageHeight) {
+    imageHeight = maxImageHeight;
+    imageWidth = imageHeight * ratio;
+  }
+
+  const imageX = frameX + (frameWidth - imageWidth) / 2;
+  const imageY = frameY + (frameHeight - imageHeight) / 2;
+  pdf.setDrawColor(...COLORS.line);
+  pdf.setFillColor(...COLORS.dark);
+  pdf.roundedRect(frameX, frameY, frameWidth, frameHeight, 1.5, 1.5, "FD");
+  pdf.addImage(
+    input.comparisonImage,
+    "PNG",
+    imageX,
+    imageY,
+    imageWidth,
+    imageHeight,
+    undefined,
+    "FAST",
+  );
+}
+
 export function createComparisonReportPdf(input: ComparisonReportInput) {
   const generatedAt = input.generatedAt ?? new Date();
-  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4", compress: true });
   const { documentA, documentB, comparison, tolerance, transform } = input;
   const actionable = comparison.differences
     .filter((difference) => difference.severity !== "correct")
@@ -151,6 +246,17 @@ export function createComparisonReportPdf(input: ComparisonReportInput) {
       const rank = { large: 2, small: 1, correct: 0 };
       return rank[second.severity] - rank[first.severity] || second.value - first.value;
     });
+  const pdf = new jsPDF({
+    orientation: input.comparisonImage ? "landscape" : "portrait",
+    unit: "mm",
+    format: "a4",
+    compress: true,
+  });
+
+  if (input.comparisonImage) {
+    addComparisonPreviewPage(pdf, input, actionable.length);
+    pdf.addPage("a4", "portrait");
+  }
 
   pdf.setFillColor(...COLORS.dark);
   pdf.rect(0, 0, 210, 28, "F");
@@ -209,14 +315,6 @@ export function createComparisonReportPdf(input: ComparisonReportInput) {
   summaryCard(pdf, 153.5, 74, cardWidth, "Grandes", String(comparison.large), COLORS.red);
 
   let cursorY = 104;
-  if (input.comparisonImage) {
-    sectionTitle(pdf, "Sobreposição analisada", cursorY);
-    pdf.setDrawColor(...COLORS.line);
-    pdf.setFillColor(...COLORS.dark);
-    pdf.roundedRect(14, cursorY + 4, 182, 66, 1.5, 1.5, "FD");
-    pdf.addImage(input.comparisonImage, "PNG", 16, cursorY + 6, 178, 62, undefined, "FAST");
-    cursorY += 78;
-  }
 
   sectionTitle(pdf, "Resumo geométrico", cursorY);
   const geometryRows: Array<[string, number, number, boolean]> = [
