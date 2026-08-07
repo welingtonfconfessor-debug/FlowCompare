@@ -869,6 +869,7 @@ export default function FlowCompareWorkspace() {
         </section>
 
         <aside className="right-panel side-panel">
+          <div className="right-panel-scroll">
           <section className="panel-section summary-section">
             <div className="section-title"><PanelTop size={15} /><h2>Resumo da comparação</h2></div>
             <div className="similarity-wrap">
@@ -929,6 +930,7 @@ export default function FlowCompareWorkspace() {
             <GeometryRow label="Contornos" a={documentA?.stats.contours} b={documentB?.stats.contours} />
             <GeometryRow label="Linhas de dobra" a={documentA?.stats.bends} b={documentB?.stats.bends} />
           </section>
+          </div>
 
           <button type="button" className="report-button" onClick={generateReport} disabled={!comparison || isGeneratingReport} title="Gerar relatório com as divergências encontradas"><Download size={17} />{isGeneratingReport ? "Gerando relatório..." : "Gerar relatório PDF"}</button>
         </aside>
