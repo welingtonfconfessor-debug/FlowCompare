@@ -497,11 +497,12 @@ export default function FlowCompareWorkspace() {
   };
 
   const moveCanvasInteraction = (event: ReactPointerEvent<SVGSVGElement>) => {
+    const hoverPoint = panRef.current || moveRef.current ? null : measurementPoint(event);
+    setSnapCandidate(hoverPoint);
+
     if (canvasTool === "measure") {
-      const point = measurementPoint(event);
-      setSnapCandidate(point);
       if (measurement && !measurement.complete) {
-        if (point) setMeasurement({ ...measurement, end: point });
+        if (hoverPoint) setMeasurement({ ...measurement, end: hoverPoint });
       }
       return;
     }
@@ -756,9 +757,7 @@ export default function FlowCompareWorkspace() {
               onPointerMove={moveCanvasInteraction}
               onPointerUp={endCanvasInteraction}
               onPointerCancel={endCanvasInteraction}
-              onPointerLeave={() => {
-                if (canvasTool === "measure") setSnapCandidate(null);
-              }}
+              onPointerLeave={() => setSnapCandidate(null)}
               aria-label="Área de comparação dos desenhos DXF"
             >
               <defs>
@@ -803,7 +802,7 @@ export default function FlowCompareWorkspace() {
                   </text>
                 </g>
               ) : null}
-              {canvasTool === "measure" && snapCandidate ? (
+              {showB && snapCandidate ? (
                 <circle
                   className="snap-candidate"
                   cx={snapCandidate.x}

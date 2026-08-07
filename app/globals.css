@@ -884,9 +884,9 @@ select:focus-visible {
 }
 
 .snap-candidate {
-  fill: rgba(47, 125, 246, 0.2);
+  fill: rgba(47, 125, 246, 0.28);
   stroke: #73aaff;
-  stroke-width: 1.5;
+  stroke-width: 1.8;
   vector-effect: non-scaling-stroke;
   pointer-events: none;
 }
