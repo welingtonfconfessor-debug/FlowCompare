@@ -38,6 +38,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type WheelEvent as ReactWheelEvent,
 } from "react";
+import { alignmentForDocuments, type AlignmentMethod } from "../lib/alignment";
 import { compareDocuments } from "../lib/comparison";
 import { parseDxfFile } from "../lib/dxf";
 import { transformBounds, unionBounds } from "../lib/geometry";
@@ -141,29 +142,6 @@ function paddedViewBox(bounds: Bounds): SvgViewBox {
     y: -(bounds.maxY + padding),
     width: width + padding * 2,
     height: height + padding * 2,
-  };
-}
-
-function alignmentFor(
-  documentA: DxfDocument,
-  documentB: DxfDocument,
-  method: string,
-): DrawingTransform {
-  if (method === "origin") {
-    return {
-      x: documentA.bounds.minX - documentB.bounds.minX,
-      y: documentA.bounds.minY - documentB.bounds.minY,
-      rotation: 0,
-    };
-  }
-  return {
-    x:
-      (documentA.bounds.minX + documentA.bounds.maxX) / 2 -
-      (documentB.bounds.minX + documentB.bounds.maxX) / 2,
-    y:
-      (documentA.bounds.minY + documentA.bounds.maxY) / 2 -
-      (documentB.bounds.minY + documentB.bounds.maxY) / 2,
-    rotation: 0,
   };
 }
 
@@ -272,7 +250,7 @@ export default function FlowCompareWorkspace() {
   const [onlyDifferences, setOnlyDifferences] = useState(false);
   const [highlightDifferences, setHighlightDifferences] = useState(true);
   const [ignoreInternal, setIgnoreInternal] = useState(false);
-  const [alignmentMethod, setAlignmentMethod] = useState("bounds");
+  const [alignmentMethod, setAlignmentMethod] = useState<AlignmentMethod>("bounds");
   const [viewTab, setViewTab] = useState<ViewTab>("view");
   const [differenceFilter, setDifferenceFilter] = useState<DifferenceFilter>("all");
   const [viewBox, setViewBox] = useState<SvgViewBox>(EMPTY_VIEWBOX);
@@ -329,13 +307,18 @@ export default function FlowCompareWorkspace() {
 
   const autoAlign = useCallback(() => {
     if (!documentA || !documentB) return;
-    const next = alignmentFor(documentA, documentB, alignmentMethod);
+    const next = alignmentForDocuments(
+      documentA,
+      documentB,
+      alignmentMethod,
+      transform.rotation,
+    );
     const fitted = viewForDocuments(documentA, documentB, next);
     setTransform(next);
     setViewBox(fitted);
     setBaseViewBox(fitted);
-    setNotice("Desenhos alinhados automaticamente.");
-  }, [alignmentMethod, documentA, documentB]);
+    setNotice(`Desenhos realinhados mantendo a rotação de ${formatNumber(next.rotation, 1)}°.`);
+  }, [alignmentMethod, documentA, documentB, transform.rotation]);
 
   const loadFile = async (side: Side, file?: File) => {
     if (!file) return;
@@ -347,7 +330,9 @@ export default function FlowCompareWorkspace() {
       const nextA = side === "A" ? parsed : documentA;
       const nextB = side === "B" ? parsed : documentB;
       let nextTransform = transform;
-      if (nextA && nextB) nextTransform = alignmentFor(nextA, nextB, alignmentMethod);
+      if (nextA && nextB) {
+        nextTransform = alignmentForDocuments(nextA, nextB, alignmentMethod);
+      }
       const fitted = viewForDocuments(nextA, nextB, nextTransform);
       if (side === "A") setDocumentA(parsed);
       else setDocumentB(parsed);
@@ -562,7 +547,7 @@ export default function FlowCompareWorkspace() {
             <div className="section-title"><AlignCenter size={15} /><h2>Alinhamento</h2></div>
             <label className="field-label" htmlFor="alignment">Método</label>
             <div className="select-wrap">
-              <select id="alignment" value={alignmentMethod} onChange={(event) => setAlignmentMethod(event.target.value)}>
+              <select id="alignment" value={alignmentMethod} onChange={(event) => setAlignmentMethod(event.target.value as AlignmentMethod)}>
                 <option value="bounds">Automático · centro dos limites</option>
                 <option value="origin">Automático · canto de origem</option>
               </select>
@@ -572,7 +557,7 @@ export default function FlowCompareWorkspace() {
               <Sparkles size={15} />
               <div>
                 <strong>{documentA && documentB ? "Arquivos prontos para alinhar" : "Aguardando os dois DXFs"}</strong>
-                <span>{documentA && documentB ? `Deslocamento: ${formatNumber(Math.hypot(transform.x, transform.y))} mm` : "Importe A e B para comparar"}</span>
+                <span>{documentA && documentB ? `Deslocamento: ${formatNumber(Math.hypot(transform.x, transform.y))} mm · Rotação: ${formatNumber(transform.rotation, 1)}°` : "Importe A e B para comparar"}</span>
               </div>
             </div>
             <div className="manual-grid">
