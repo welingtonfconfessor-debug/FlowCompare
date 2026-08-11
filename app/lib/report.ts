@@ -113,6 +113,15 @@ function differenceValue(difference: Difference) {
   return `${formatNumber(difference.value)}${suffix}`;
 }
 
+function correctionValue(difference: Difference) {
+  if (!difference.correction) return "—";
+  const measurement = `${formatNumber(difference.correction.value)} mm`;
+  if (difference.correction.direction === "up") return `Subir ${measurement}`;
+  if (difference.correction.direction === "down") return `Descer ${measurement}`;
+  if (difference.correction.direction === "left") return `Mover ${measurement} para a esquerda`;
+  return `Mover ${measurement} para a direita`;
+}
+
 function severityColor(severity: DifferenceSeverity) {
   if (severity === "large") return COLORS.red;
   if (severity === "small") return COLORS.yellow;
@@ -400,21 +409,22 @@ export function createComparisonReportPdf(input: ComparisonReportInput) {
       margin: { left: 14, right: 14, bottom: 15 },
       theme: "grid",
       showHead: "everyPage",
-      head: [["Elemento", "Categoria", "Origem", "Desvio", "Classificação"]],
+      head: [["Elemento", "Categoria", "Origem", "Desvio", "Correção recomendada", "Classificação"]],
       body: actionable.map((difference) => [
         difference.label,
         CATEGORY_LABELS[difference.category],
         sourceLabel(difference.source),
         differenceValue(difference),
+        correctionValue(difference),
         {
           content: SEVERITY_LABELS[difference.severity],
           styles: { textColor: severityColor(difference.severity), fontStyle: "bold" },
         } as CellDef,
       ]),
-      styles: { font: "helvetica", fontSize: 7.2, cellPadding: 2.1, textColor: COLORS.ink, lineColor: COLORS.line, lineWidth: 0.2 },
+      styles: { font: "helvetica", fontSize: 6.8, cellPadding: 1.7, textColor: COLORS.ink, lineColor: COLORS.line, lineWidth: 0.2 },
       headStyles: { fillColor: COLORS.dark, textColor: [255, 255, 255], fontStyle: "bold" },
       alternateRowStyles: { fillColor: COLORS.paper },
-      columnStyles: { 3: { halign: "right" }, 4: { halign: "center" } },
+      columnStyles: { 2: { cellWidth: 17 }, 3: { cellWidth: 22, halign: "right" }, 4: { cellWidth: 43 }, 5: { cellWidth: 25, halign: "center" } },
     });
     cursorY = tableFinalY(pdf, cursorY + 30) + 11;
   } else {
@@ -441,6 +451,7 @@ export function createComparisonReportPdf(input: ComparisonReportInput) {
     `Pequena divergência: acima da tolerância e até ${formatNumber(tolerance * 5)} mm.`,
     `Grande divergência: acima de ${formatNumber(tolerance * 5)} mm.`,
     `Ajuste aplicado ao Arquivo B: X ${signedNumber(transform.x)}, Y ${signedNumber(transform.y)}, rotação ${signedNumber(transform.rotation, "°")}.`,
+    "As correções direcionais indicam como mover o Arquivo B para coincidir com a Referência A.",
     "Valores geométricos são calculados diretamente das entidades importadas dos arquivos DXF.",
   ];
   pdf.text(criteria, 14, cursorY + 7, { maxWidth: 182, lineHeightFactor: 1.55 });

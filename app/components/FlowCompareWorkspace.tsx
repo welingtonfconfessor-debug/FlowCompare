@@ -99,6 +99,15 @@ const formatDifferenceMeasurement = (difference: Difference, signed = false) => 
   return `${sign}${formatNumber(Math.abs(rawValue), digits)}${differenceUnitSuffix(difference)}`;
 };
 
+const formatDifferenceResult = (difference: Difference) => {
+  if (!difference.correction) return formatDifferenceMeasurement(difference, true);
+  const measurement = `${formatNumber(difference.correction.value)} mm`;
+  if (difference.correction.direction === "up") return `Subir ${measurement}`;
+  if (difference.correction.direction === "down") return `Descer ${measurement}`;
+  if (difference.correction.direction === "left") return `Mover ${measurement} para a esquerda`;
+  return `Mover ${measurement} para a direita`;
+};
+
 const formatFileSize = (size: number) => {
   if (size < 1024 * 1024) return `${formatNumber(size / 1024, 1)} KB`;
   return `${formatNumber(size / (1024 * 1024), 2)} MB`;
@@ -912,7 +921,7 @@ export default function FlowCompareWorkspace() {
               <button className={differenceFilter === "large" ? "active" : ""} type="button" onClick={() => setDifferenceFilter("large")}>Grandes <span>{comparison?.large ?? 0}</span></button>
               <button className={differenceFilter === "small" ? "active" : ""} type="button" onClick={() => setDifferenceFilter("small")}>Pequenas <span>{comparison?.small ?? 0}</span></button>
             </div>
-            <div className="difference-header"><span>Elemento</span><span>Diferença</span></div>
+            <div className="difference-header"><span>Elemento</span><span>Correção</span></div>
             <div className="difference-list">
               {visibleDifferences.length ? (
                 visibleDifferences.map((difference) => (
@@ -964,7 +973,7 @@ function DifferenceRow({
   return (
     <div className={`difference-row severity-${difference.severity} ${focused ? "is-focused" : ""}`}>
       <span title={difference.label}>{difference.label}</span>
-      <strong>{formatDifferenceMeasurement(difference, true)}</strong>
+      <strong title={formatDifferenceResult(difference)}>{formatDifferenceResult(difference)}</strong>
       {difference.severity === "correct" ? (
         <Check size={15} />
       ) : (

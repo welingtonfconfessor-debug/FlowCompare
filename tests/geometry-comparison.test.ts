@@ -192,8 +192,8 @@ test("trata linhas conectadas e polilinha como o mesmo contorno após rotação"
   assert.equal(documentB.stats.contours, 1);
   assert.equal(documentA.stats.area, 5_000);
   assert.equal(documentB.stats.area, 5_000);
-  assert.equal(result.totalCompared, 7);
-  assert.equal(result.correct, 7);
+  assert.equal(result.totalCompared, 10);
+  assert.equal(result.correct, 10);
   assert.equal(result.small, 0);
   assert.equal(result.large, 0);
   assert.equal(result.similarity, 100);
@@ -214,16 +214,41 @@ test("reporta uma única divergência de contorno sem inverter largura e comprim
 
   const width = result.differences.find((difference) => difference.id === "metric-width");
   const height = result.differences.find((difference) => difference.id === "metric-height");
-  const contours = result.differences.filter((difference) => difference.label === "Contorno externo");
+  const contours = result.differences.filter((difference) => difference.category === "contour" && difference.source === "B");
 
   assert.ok(width && Math.abs(width.signedValue - 0.4) < 1e-9);
   assert.ok(height && Math.abs(height.signedValue) < 1e-9);
-  assert.equal(contours.length, 1);
-  assert.equal(result.totalCompared, 7);
+  assert.equal(contours.length, 4);
+  assert.equal(result.totalCompared, 10);
   assert.equal(result.small, 2);
   assert.equal(result.large, 0);
   assert.ok(result.maxDifference < 1);
   assert.ok(result.similarity > 95);
+});
+
+test("informa como corrigir cada limite do contorno do arquivo B", () => {
+  const documentA = parseDxfText(rectangleFromPolylineDxf(100, 50), "referencia.dxf");
+  const documentB = parseDxfText(rectangleFromPolylineDxf(99.5, 49.5), "comparado.dxf");
+  const transform = alignmentForDocuments(documentA, documentB, "bounds");
+  const result = compareDocuments(
+    documentA,
+    documentB,
+    transform,
+    { tolerance: 0.2, ignoreInternal: false },
+  );
+
+  const expected = new Map([
+    ["Linha superior", "up"],
+    ["Linha inferior", "down"],
+    ["Linha esquerda", "left"],
+    ["Linha direita", "right"],
+  ]);
+  expected.forEach((direction, label) => {
+    const difference = result.differences.find((item) => item.label === label);
+    assert.ok(difference?.correction);
+    assert.equal(difference.correction.direction, direction);
+    assert.ok(Math.abs(difference.correction.value - 0.25) < 1e-9);
+  });
 });
 
 test("calcula a área planificada de um perfil U exportado em DXF", () => {

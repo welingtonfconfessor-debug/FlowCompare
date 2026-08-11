@@ -60,6 +60,8 @@ export type DrawingTransform = {
 
 export type DifferenceSeverity = "correct" | "small" | "large";
 
+export type CorrectionDirection = "up" | "down" | "left" | "right";
+
 export type DifferenceCategory =
   | "geometry"
   | "dimension"
@@ -76,6 +78,10 @@ export type Difference = {
   value: number;
   signedValue: number;
   unit: "mm" | "mm2" | "count";
+  correction?: {
+    direction: CorrectionDirection;
+    value: number;
+  };
   bounds: Bounds;
   source: "A" | "B" | "metric";
   entityIds?: {

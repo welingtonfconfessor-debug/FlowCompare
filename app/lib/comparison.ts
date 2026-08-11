@@ -154,6 +154,87 @@ function matchedFeatureDifference(
   };
 }
 
+type ContourSide = {
+  id: "top" | "bottom" | "left" | "right";
+  label: string;
+  axis: "x" | "y";
+  coordinate: "minX" | "minY" | "maxX" | "maxY";
+};
+
+const CONTOUR_SIDES: ContourSide[] = [
+  { id: "top", label: "Linha superior", axis: "y", coordinate: "maxY" },
+  { id: "bottom", label: "Linha inferior", axis: "y", coordinate: "minY" },
+  { id: "left", label: "Linha esquerda", axis: "x", coordinate: "minX" },
+  { id: "right", label: "Linha direita", axis: "x", coordinate: "maxX" },
+];
+
+function correctionDirection(axis: ContourSide["axis"], delta: number) {
+  if (axis === "x") return delta > 0 ? "right" : "left";
+  return delta > 0 ? "up" : "down";
+}
+
+function contourSideBounds(
+  side: ContourSide,
+  boundsA: Bounds,
+  boundsB: Bounds,
+): Bounds {
+  const coordinateA = boundsA[side.coordinate];
+  const coordinateB = boundsB[side.coordinate];
+  if (side.axis === "y") {
+    return {
+      minX: Math.min(boundsA.minX, boundsB.minX),
+      minY: Math.min(coordinateA, coordinateB),
+      maxX: Math.max(boundsA.maxX, boundsB.maxX),
+      maxY: Math.max(coordinateA, coordinateB),
+    };
+  }
+  return {
+    minX: Math.min(coordinateA, coordinateB),
+    minY: Math.min(boundsA.minY, boundsB.minY),
+    maxX: Math.max(coordinateA, coordinateB),
+    maxY: Math.max(boundsA.maxY, boundsB.maxY),
+  };
+}
+
+function contourSideDifferences(
+  featureA: ComparisonFeature,
+  featureB: ComparisonFeature,
+  tolerance: number,
+): Difference[] {
+  return CONTOUR_SIDES.map((side) => {
+    const correctionDelta = featureA.bounds[side.coordinate] - featureB.bounds[side.coordinate];
+    const value = Math.abs(correctionDelta);
+    return {
+      id: `feature-${featureA.id}-${featureB.id}-${side.id}`,
+      label: side.label,
+      category: "contour",
+      severity: severityFor(value, tolerance),
+      value,
+      signedValue: correctionDelta,
+      unit: "mm",
+      correction:
+        value > 0.000001
+          ? { direction: correctionDirection(side.axis, correctionDelta), value }
+          : undefined,
+      bounds: contourSideBounds(side, featureA.bounds, featureB.bounds),
+      source: "B",
+      entityIds: { A: featureA.entityIds, B: featureB.entityIds },
+    };
+  });
+}
+
+function matchedFeatureDifferences(
+  featureA: ComparisonFeature,
+  featureB: ComparisonFeature,
+  value: number,
+  tolerance: number,
+) {
+  if (featureA.category === "contour") {
+    return contourSideDifferences(featureA, featureB, tolerance);
+  }
+  return [matchedFeatureDifference(featureA, featureB, value, tolerance)];
+}
+
 function missingFeatureDifference(
   feature: ComparisonFeature,
   source: "A" | "B",
@@ -216,7 +297,7 @@ function compareFeatures(
     const match = matches.get(index);
     if (match) {
       differences.push(
-        matchedFeatureDifference(
+        ...matchedFeatureDifferences(
           match.featureA,
           match.featureB,
           match.distance,

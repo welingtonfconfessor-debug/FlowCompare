@@ -1146,7 +1146,7 @@ select:focus-visible {
 .difference-header,
 .difference-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 82px 26px;
+  grid-template-columns: minmax(82px, 1fr) minmax(112px, auto) 26px;
   align-items: center;
   gap: 6px;
 }
@@ -1168,7 +1168,7 @@ select:focus-visible {
 }
 
 .difference-row {
-  min-height: 38px;
+  min-height: 44px;
   border-top: 1px solid #1e2a30;
   color: #aeb8bd;
   font-size: var(--text-secondary);
@@ -1184,9 +1184,11 @@ select:focus-visible {
 
 .difference-row strong {
   text-align: right;
-  font-family: var(--font-mono-ui);
+  font-family: var(--font-ui);
   font-size: var(--text-secondary);
   font-weight: 580;
+  line-height: 1.25;
+  padding: 5px 0;
 }
 
 .difference-row svg {
