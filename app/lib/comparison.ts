@@ -10,6 +10,7 @@ import type {
   Segment,
 } from "../types";
 import {
+  areaToleranceFromLinear,
   boundsFromSegments,
   connectedGeometryComponents,
   nearestDistance,
@@ -146,6 +147,7 @@ function matchedFeatureDifference(
     severity: severityFor(value, tolerance),
     value,
     signedValue: value * direction,
+    unit: "mm",
     bounds: unionBounds([featureA.bounds, featureB.bounds]),
     source: "B",
     entityIds: { A: featureA.entityIds, B: featureB.entityIds },
@@ -171,6 +173,7 @@ function missingFeatureDifference(
     severity: severityFor(value, tolerance),
     value,
     signedValue: source === "B" ? value : -value,
+    unit: "mm",
     bounds: feature.bounds,
     source,
     entityIds: {
@@ -245,6 +248,7 @@ function metricDifference(
   bValue: number,
   tolerance: number,
   bounds: Bounds,
+  unit: Difference["unit"] = "mm",
 ): Difference {
   const signedValue = bValue - aValue;
   const value = Math.abs(signedValue);
@@ -255,6 +259,7 @@ function metricDifference(
     severity: severityFor(value, tolerance),
     value,
     signedValue,
+    unit,
     bounds,
     source: "metric",
   };
@@ -304,6 +309,11 @@ export function compareDocuments(
     transformFeature(feature, transform),
   );
   const geometry = compareFeatures(featuresA, featuresB, tolerance, drawingDiagonal);
+  const areaTolerance = areaToleranceFromLinear(
+    documentA.stats.width,
+    documentA.stats.height,
+    tolerance,
+  );
   const metrics = [
     metricDifference(
       "metric-width",
@@ -324,13 +334,14 @@ export function compareDocuments(
       documentA.bounds,
     ),
     metricDifference(
-      "metric-path",
-      "Comprimento de geometria",
+      "metric-area",
+      "Área líquida",
       "dimension",
-      documentA.stats.totalLength,
-      documentB.stats.totalLength,
-      tolerance,
+      documentA.stats.area,
+      documentB.stats.area,
+      areaTolerance,
       documentA.bounds,
+      "mm2",
     ),
     metricDifference(
       "metric-holes",
@@ -340,6 +351,7 @@ export function compareDocuments(
       documentB.stats.holes,
       0.01,
       transformedBoundsB,
+      "count",
     ),
     metricDifference(
       "metric-cutouts",
@@ -349,6 +361,7 @@ export function compareDocuments(
       documentB.stats.cutouts,
       0.01,
       transformedBoundsB,
+      "count",
     ),
     metricDifference(
       "metric-contours",
@@ -358,6 +371,7 @@ export function compareDocuments(
       documentB.stats.contours,
       0.01,
       transformedBoundsB,
+      "count",
     ),
   ];
 
@@ -402,7 +416,12 @@ export function compareDocuments(
     correct,
     small,
     large,
-    maxDifference: Math.max(0, ...differences.map((difference) => difference.value)),
+    maxDifference: Math.max(
+      0,
+      ...differences
+        .filter((difference) => difference.unit === "mm")
+        .map((difference) => difference.value),
+    ),
     transformedB,
     alignedStatsB,
   };

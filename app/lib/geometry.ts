@@ -158,13 +158,25 @@ export function segmentLength(segment: Segment) {
   return Math.hypot(segment.b.x - segment.a.x, segment.b.y - segment.a.y);
 }
 
-function entityArea(segments: Segment[], closed: boolean) {
-  if (!closed || segments.length < 3) return 0;
+function polygonArea(points: Point[]) {
+  if (points.length < 3) return 0;
   let area = 0;
-  for (const segment of segments) {
-    area += segment.a.x * segment.b.y - segment.b.x * segment.a.y;
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index];
+    const next = points[(index + 1) % points.length];
+    area += current.x * next.y - next.x * current.y;
   }
   return Math.abs(area / 2);
+}
+
+function entityArea(segments: Segment[], closed: boolean) {
+  if (!closed || segments.length < 3) return 0;
+  return Math.abs(
+    segments.reduce(
+      (area, segment) => area + segment.a.x * segment.b.y - segment.b.x * segment.a.y,
+      0,
+    ) / 2,
+  );
 }
 
 function pointsFromEntity(entity: RawEntity) {
@@ -265,7 +277,7 @@ export function entityToGeometry(entity: RawEntity, index: number, scale = 1): E
     bounds,
     closed,
     length,
-    area: entityArea(segments, closed),
+    area: type === "CIRCLE" && radius ? Math.PI * radius * radius : entityArea(segments, closed),
     radius,
     isBend: BEND_LAYER.test(layer),
   };
@@ -322,6 +334,136 @@ function forNearbyBuckets(point: Point, tolerance: number, callback: (key: strin
       callback(bucketKey(bucket.x + offsetX, bucket.y + offsetY));
     }
   }
+}
+
+function pointsAreNear(first: Point, second: Point, tolerance: number) {
+  return Math.hypot(first.x - second.x, first.y - second.y) <= tolerance;
+}
+
+type ClosedRing = {
+  points: Point[];
+  entityIds: string[];
+  area: number;
+  bounds: Bounds;
+};
+
+function closedRingsFromSegments(
+  segments: Segment[],
+  entities: Map<string, EntityGeometry>,
+  tolerance: number,
+): ClosedRing[] {
+  const unused = new Set(segments.map((_, index) => index));
+  const endpointBuckets = new Map<string, Array<{ index: number; point: Point }>>();
+
+  segments.forEach((segment, index) => {
+    for (const point of [segment.a, segment.b]) {
+      const bucket = pointBucket(point, tolerance);
+      const key = bucketKey(bucket.x, bucket.y);
+      endpointBuckets.set(key, [...(endpointBuckets.get(key) ?? []), { index, point }]);
+    }
+  });
+
+  const nextSegment = (point: Point) => {
+    let match: number | undefined;
+    forNearbyBuckets(point, tolerance, (key) => {
+      if (match !== undefined) return;
+      match = endpointBuckets
+        .get(key)
+        ?.find((candidate) => unused.has(candidate.index) && pointsAreNear(candidate.point, point, tolerance))
+        ?.index;
+    });
+    return match;
+  };
+
+  const rings: ClosedRing[] = [];
+  while (unused.size) {
+    const firstIndex = unused.values().next().value as number;
+    const first = segments[firstIndex];
+    unused.delete(firstIndex);
+    const points = [first.a, first.b];
+    const ringSegments = [first];
+    let current = first.b;
+    let closed = false;
+
+    for (let guard = 0; guard < segments.length; guard += 1) {
+      if (points.length >= 4 && pointsAreNear(current, points[0], tolerance)) {
+        closed = true;
+        break;
+      }
+      const candidateIndex = nextSegment(current);
+      if (candidateIndex === undefined) break;
+      const candidate = segments[candidateIndex];
+      unused.delete(candidateIndex);
+      ringSegments.push(candidate);
+      current = pointsAreNear(candidate.a, current, tolerance) ? candidate.b : candidate.a;
+      points.push(current);
+    }
+
+    if (!closed) continue;
+    const polygon = points.slice(0, -1);
+    const entityIds = Array.from(new Set(ringSegments.map((segment) => segment.entityId)));
+    const singleEntity = entityIds.length === 1 ? entities.get(entityIds[0]) : undefined;
+    rings.push({
+      points: polygon,
+      entityIds,
+      area: singleEntity?.closed ? singleEntity.area : polygonArea(polygon),
+      bounds: boundsFromSegments(ringSegments),
+    });
+  }
+  return rings;
+}
+
+function pointInRing(point: Point, ring: ClosedRing) {
+  if (
+    point.x < ring.bounds.minX ||
+    point.x > ring.bounds.maxX ||
+    point.y < ring.bounds.minY ||
+    point.y > ring.bounds.maxY
+  ) {
+    return false;
+  }
+  let inside = false;
+  for (let index = 0, previous = ring.points.length - 1; index < ring.points.length; previous = index, index += 1) {
+    const currentPoint = ring.points[index];
+    const previousPoint = ring.points[previous];
+    const crosses =
+      currentPoint.y > point.y !== previousPoint.y > point.y &&
+      point.x <
+        ((previousPoint.x - currentPoint.x) * (point.y - currentPoint.y)) /
+          (previousPoint.y - currentPoint.y) +
+          currentPoint.x;
+    if (crosses) inside = !inside;
+  }
+  return inside;
+}
+
+export function netGeometryArea(entities: EntityGeometry[], connectionTolerance = 0.01) {
+  const areaEntities = entities.filter((entity) => !entity.isBend);
+  const entityMap = new Map(areaEntities.map((entity) => [entity.id, entity]));
+  const rings = closedRingsFromSegments(
+    areaEntities.flatMap((entity) => entity.segments),
+    entityMap,
+    Math.max(connectionTolerance, 0.000001),
+  );
+
+  const netArea = rings.reduce((total, ring, index) => {
+    const probe = ring.points[0];
+    const nestingDepth = rings.reduce(
+      (depth, candidate, candidateIndex) =>
+        candidateIndex !== index && pointInRing(probe, candidate) ? depth + 1 : depth,
+      0,
+    );
+    return total + (nestingDepth % 2 === 0 ? ring.area : -ring.area);
+  }, 0);
+  return Math.max(0, netArea);
+}
+
+export function areaToleranceFromLinear(width: number, height: number, tolerance: number) {
+  const linearTolerance = Math.max(0.001, tolerance);
+  return Math.max(
+    linearTolerance * linearTolerance,
+    (Math.max(0, width) + Math.max(0, height)) * linearTolerance + linearTolerance * linearTolerance,
+  );
 }
 
 function componentIsClosed(segments: Segment[], tolerance: number) {
@@ -416,6 +558,7 @@ export function geometryStats(entities: EntityGeometry[], bounds: Bounds): Geome
   ).filter((component) => component.closed);
   return {
     totalLength: entities.reduce((sum, entity) => sum + entity.length, 0),
+    area: netGeometryArea(entities),
     width: Math.max(0, bounds.maxX - bounds.minX),
     height: Math.max(0, bounds.maxY - bounds.minY),
     holes: entities.filter((entity) => entity.type === "CIRCLE").length,

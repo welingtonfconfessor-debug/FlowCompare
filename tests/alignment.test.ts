@@ -12,6 +12,7 @@ function documentWithBounds(name: string, bounds: Bounds): DxfDocument {
     bounds,
     stats: {
       totalLength: 0,
+      area: 0,
       width: bounds.maxX - bounds.minX,
       height: bounds.maxY - bounds.minY,
       holes: 0,

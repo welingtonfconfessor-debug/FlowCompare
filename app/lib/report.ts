@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import autoTable, { type CellDef } from "jspdf-autotable";
 import { FLOWCOMPARE_LOGO, type FlowCompareLogoPath } from "./brand";
+import { areaToleranceFromLinear } from "./geometry";
 import type {
   ComparisonResult,
   Difference,
@@ -105,11 +106,11 @@ const sourceLabel = (source: Difference["source"]) => {
 };
 
 function differenceValue(difference: Difference) {
-  const isCount = /holes|cutouts|contours/.test(difference.id);
+  const suffix = difference.unit === "mm2" ? " mm²" : difference.unit === "count" ? " un." : " mm";
   if (difference.source === "metric") {
-    return signedNumber(difference.signedValue, isCount ? " un." : " mm");
+    return signedNumber(difference.signedValue, suffix);
   }
-  return `${formatNumber(difference.value)} mm`;
+  return `${formatNumber(difference.value)}${suffix}`;
 }
 
 function severityColor(severity: DifferenceSeverity) {
@@ -118,8 +119,7 @@ function severityColor(severity: DifferenceSeverity) {
   return COLORS.green;
 }
 
-function metricSeverity(delta: number, tolerance: number, count = false): DifferenceSeverity {
-  const limit = count ? 0.01 : tolerance;
+function metricSeverity(delta: number, limit: number): DifferenceSeverity {
   if (Math.abs(delta) <= limit) return "correct";
   if (Math.abs(delta) <= limit * 5) return "small";
   return "large";
@@ -347,28 +347,37 @@ export function createComparisonReportPdf(input: ComparisonReportInput) {
   let cursorY = 104;
 
   sectionTitle(pdf, "Resumo geométrico", cursorY);
-  const geometryRows: Array<[string, number, number, boolean]> = [
-    ["Largura total", documentA.stats.width, comparison.alignedStatsB.width, false],
-    ["Comprimento total", documentA.stats.height, comparison.alignedStatsB.height, false],
-    ["Comprimento de geometria", documentA.stats.totalLength, documentB.stats.totalLength, false],
-    ["Furos", documentA.stats.holes, documentB.stats.holes, true],
-    ["Recortes", documentA.stats.cutouts, documentB.stats.cutouts, true],
-    ["Contornos", documentA.stats.contours, documentB.stats.contours, true],
-    ["Linhas de dobra", documentA.stats.bends, documentB.stats.bends, true],
+  const areaTolerance = areaToleranceFromLinear(documentA.stats.width, documentA.stats.height, tolerance);
+  const geometryRows: Array<{
+    label: string;
+    a: number;
+    b: number;
+    unit: "mm" | "mm2" | "count";
+    limit: number;
+  }> = [
+    { label: "Largura total", a: documentA.stats.width, b: comparison.alignedStatsB.width, unit: "mm", limit: tolerance },
+    { label: "Comprimento total", a: documentA.stats.height, b: comparison.alignedStatsB.height, unit: "mm", limit: tolerance },
+    { label: "Área líquida", a: documentA.stats.area, b: documentB.stats.area, unit: "mm2", limit: areaTolerance },
+    { label: "Furos", a: documentA.stats.holes, b: documentB.stats.holes, unit: "count", limit: 0.01 },
+    { label: "Recortes", a: documentA.stats.cutouts, b: documentB.stats.cutouts, unit: "count", limit: 0.01 },
+    { label: "Contornos", a: documentA.stats.contours, b: documentB.stats.contours, unit: "count", limit: 0.01 },
+    { label: "Linhas de dobra", a: documentA.stats.bends, b: documentB.stats.bends, unit: "count", limit: 0.01 },
   ];
   autoTable(pdf, {
     startY: cursorY + 4,
     margin: { left: 14, right: 14, bottom: 15 },
     theme: "grid",
     head: [["Métrica", "Referência A", "Arquivo B", "Diferença", "Situação"]],
-    body: geometryRows.map(([label, a, b, count]) => {
+    body: geometryRows.map(({ label, a, b, unit, limit }) => {
       const delta = b - a;
-      const severity = metricSeverity(delta, tolerance, count);
+      const severity = metricSeverity(delta, limit);
+      const digits = unit === "count" ? 0 : 2;
+      const suffix = unit === "mm2" ? " mm²" : unit === "count" ? "" : " mm";
       return [
         label,
-        count ? formatNumber(a, 0) : `${formatNumber(a)} mm`,
-        count ? formatNumber(b, 0) : `${formatNumber(b)} mm`,
-        signedNumber(delta, count ? " un." : " mm"),
+        `${formatNumber(a, digits)}${suffix}`,
+        `${formatNumber(b, digits)}${suffix}`,
+        signedNumber(delta, unit === "count" ? " un." : suffix),
         { content: SEVERITY_LABELS[severity], styles: { textColor: severityColor(severity), fontStyle: "bold" } } as CellDef,
       ];
     }),

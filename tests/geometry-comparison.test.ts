@@ -139,6 +139,7 @@ test("lê geometrias e estatísticas reais do DXF", () => {
   const document = parseDxfText(trayDxf(100, 20), "bandeja-a.dxf");
   assert.equal(document.stats.width, 100);
   assert.equal(document.stats.height, 50);
+  assert.ok(Math.abs(document.stats.area - (5_000 - Math.PI * 25)) < 0.001);
   assert.equal(document.stats.holes, 1);
   assert.equal(document.stats.bends, 1);
   assert.equal(document.entities.length, 3);
@@ -158,6 +159,9 @@ test("detecta diferenças a partir da geometria importada", () => {
   assert.ok(result.large > 0);
   assert.ok(result.similarity < 100);
   assert.ok(result.differences.some((difference) => difference.label === "Largura total"));
+  const area = result.differences.find((difference) => difference.id === "metric-area");
+  assert.ok(area && Math.abs(area.signedValue - 100) < 0.001);
+  assert.equal(area.unit, "mm2");
 });
 
 test("desenhos idênticos recebem similaridade total", () => {
@@ -186,6 +190,8 @@ test("trata linhas conectadas e polilinha como o mesmo contorno após rotação"
 
   assert.equal(documentA.stats.contours, 1);
   assert.equal(documentB.stats.contours, 1);
+  assert.equal(documentA.stats.area, 5_000);
+  assert.equal(documentB.stats.area, 5_000);
   assert.equal(result.totalCompared, 7);
   assert.equal(result.correct, 7);
   assert.equal(result.small, 0);
@@ -214,8 +220,15 @@ test("reporta uma única divergência de contorno sem inverter largura e comprim
   assert.ok(height && Math.abs(height.signedValue) < 1e-9);
   assert.equal(contours.length, 1);
   assert.equal(result.totalCompared, 7);
-  assert.equal(result.small, 3);
+  assert.equal(result.small, 2);
   assert.equal(result.large, 0);
   assert.ok(result.maxDifference < 1);
   assert.ok(result.similarity > 95);
+});
+
+test("calcula a área planificada de um perfil U exportado em DXF", () => {
+  const flatWidth = 272.2622733333333;
+  const document = parseDxfText(rectangleFromPolylineDxf(flatWidth, 1_500), "perfil-u.dxf");
+
+  assert.ok(Math.abs(document.stats.area - 408_393.41) < 0.01);
 });

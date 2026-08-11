@@ -33,6 +33,7 @@ export type EntityGeometry = {
 
 export type GeometryStats = {
   totalLength: number;
+  area: number;
   width: number;
   height: number;
   holes: number;
@@ -74,6 +75,7 @@ export type Difference = {
   severity: DifferenceSeverity;
   value: number;
   signedValue: number;
+  unit: "mm" | "mm2" | "count";
   bounds: Bounds;
   source: "A" | "B" | "metric";
   entityIds?: {

@@ -86,6 +86,19 @@ const formatNumber = (value: number, digits = 2) =>
     maximumFractionDigits: digits,
   });
 
+const differenceUnitSuffix = (difference: Difference) => {
+  if (difference.unit === "mm2") return " mm²";
+  if (difference.unit === "count") return "";
+  return " mm";
+};
+
+const formatDifferenceMeasurement = (difference: Difference, signed = false) => {
+  const rawValue = signed ? difference.signedValue : difference.value;
+  const sign = signed && rawValue !== 0 ? (rawValue > 0 ? "+" : "−") : "";
+  const digits = difference.unit === "count" ? 0 : 2;
+  return `${sign}${formatNumber(Math.abs(rawValue), digits)}${differenceUnitSuffix(difference)}`;
+};
+
 const formatFileSize = (size: number) => {
   if (size < 1024 * 1024) return `${formatNumber(size / 1024, 1)} KB`;
   return `${formatNumber(size / (1024 * 1024), 2)} MB`;
@@ -821,7 +834,7 @@ export default function FlowCompareWorkspace() {
                         <rect className="diff-box" x={region.x - padding} y={region.y - padding} width={region.width + padding * 2} height={region.height + padding * 2} rx={padding * 0.25} />
                         <line className="diff-line" x1={region.x + region.width} y1={region.y} x2={labelX} y2={labelY} />
                         <text className="diff-label" x={labelX + padding * 0.35} y={labelY} fontSize={labelSize}>
-                          {`${difference.value > 0 ? "+" : ""}${formatNumber(difference.value)} mm`}
+                          {formatDifferenceMeasurement(difference, true)}
                         </text>
                       </g>
                     );
@@ -924,7 +937,7 @@ export default function FlowCompareWorkspace() {
             <div className="geometry-head"><span>Métrica</span><b>A</b><b>B</b></div>
             <GeometryRow label="Largura" a={documentA?.stats.width} b={comparison?.alignedStatsB.width ?? documentB?.stats.width} suffix="mm" />
             <GeometryRow label="Comprimento" a={documentA?.stats.height} b={comparison?.alignedStatsB.height ?? documentB?.stats.height} suffix="mm" />
-            <GeometryRow label="Geometria total" a={documentA?.stats.totalLength} b={documentB?.stats.totalLength} suffix="mm" />
+            <GeometryRow label="Área líquida" a={documentA?.stats.area} b={documentB?.stats.area} suffix="mm²" />
             <GeometryRow label="Furos" a={documentA?.stats.holes} b={documentB?.stats.holes} />
             <GeometryRow label="Recortes" a={documentA?.stats.cutouts} b={documentB?.stats.cutouts} />
             <GeometryRow label="Contornos" a={documentA?.stats.contours} b={documentB?.stats.contours} />
@@ -948,13 +961,10 @@ function DifferenceRow({
   focused: boolean;
   onFocus: (difference: Difference) => void;
 }) {
-  const isCount = difference.id.includes("holes") || difference.id.includes("cutouts") || difference.id.includes("contours");
-  const signed = difference.signedValue;
-  const value = `${signed > 0 ? "+" : signed < 0 ? "−" : ""}${formatNumber(Math.abs(signed))}${isCount ? "" : " mm"}`;
   return (
     <div className={`difference-row severity-${difference.severity} ${focused ? "is-focused" : ""}`}>
       <span title={difference.label}>{difference.label}</span>
-      <strong>{value}</strong>
+      <strong>{formatDifferenceMeasurement(difference, true)}</strong>
       {difference.severity === "correct" ? (
         <Check size={15} />
       ) : (
