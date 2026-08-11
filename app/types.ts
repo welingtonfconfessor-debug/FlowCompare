@@ -62,6 +62,22 @@ export type DifferenceSeverity = "correct" | "small" | "large";
 
 export type CorrectionDirection = "up" | "down" | "left" | "right";
 
+export type CorrectionEndpoint = "left" | "right" | "top" | "bottom" | "start" | "end" | "both";
+
+export type DifferenceCorrection =
+  | {
+      kind: "move";
+      direction: CorrectionDirection;
+      value: number;
+    }
+  | {
+      kind: "resize";
+      operation: "extend" | "shorten";
+      endpoint: CorrectionEndpoint;
+      value: number;
+      eachEnd?: number;
+    };
+
 export type DifferenceCategory =
   | "geometry"
   | "dimension"
@@ -78,10 +94,7 @@ export type Difference = {
   value: number;
   signedValue: number;
   unit: "mm" | "mm2" | "count";
-  correction?: {
-    direction: CorrectionDirection;
-    value: number;
-  };
+  corrections?: DifferenceCorrection[];
   bounds: Bounds;
   source: "A" | "B" | "metric";
   entityIds?: {

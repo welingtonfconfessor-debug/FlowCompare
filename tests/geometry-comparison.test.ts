@@ -4,7 +4,7 @@ import { alignmentForDocuments } from "../app/lib/alignment";
 import { compareDocuments } from "../app/lib/comparison";
 import { parseDxfText } from "../app/lib/dxf";
 
-function trayDxf(width: number, holeX: number, bendX = 50) {
+function trayDxf(width: number, holeX: number, bendX = 50, bendStart = 5, bendEnd = 45) {
   return `0
 SECTION
 2
@@ -60,11 +60,11 @@ DOBRA
 10
 ${bendX}
 20
-5
+${bendStart}
 11
 ${bendX}
 21
-45
+${bendEnd}
 0
 ENDSEC
 0
@@ -245,9 +245,10 @@ test("informa como corrigir cada limite do contorno do arquivo B", () => {
   ]);
   expected.forEach((direction, label) => {
     const difference = result.differences.find((item) => item.label === label);
-    assert.ok(difference?.correction);
-    assert.equal(difference.correction.direction, direction);
-    assert.ok(Math.abs(difference.correction.value - 0.25) < 1e-9);
+    const correction = difference?.corrections?.find((item) => item.kind === "move");
+    assert.ok(correction?.kind === "move");
+    assert.equal(correction.direction, direction);
+    assert.ok(Math.abs(correction.value - 0.25) < 1e-9);
   });
 });
 
@@ -262,9 +263,30 @@ test("recomenda o movimento necessário para uma linha de dobra", () => {
   );
 
   const bend = result.differences.find((difference) => difference.category === "bend");
-  assert.ok(bend?.correction);
-  assert.equal(bend.correction.direction, "right");
-  assert.ok(Math.abs(bend.correction.value - 0.25) < 1e-9);
+  const correction = bend?.corrections?.find((item) => item.kind === "move");
+  assert.ok(correction?.kind === "move");
+  assert.equal(correction.direction, "right");
+  assert.ok(Math.abs(correction.value - 0.25) < 1e-9);
+});
+
+test("recomenda alongar a dobra quando os centros coincidem e as extremidades diferem", () => {
+  const documentA = parseDxfText(trayDxf(100, 20, 50, 5, 45), "referencia.dxf");
+  const documentB = parseDxfText(trayDxf(100, 20, 50.001, 5.25, 44.75), "comparado.dxf");
+  const result = compareDocuments(
+    documentA,
+    documentB,
+    { x: 0, y: 0, rotation: 0 },
+    { tolerance: 0.2, ignoreInternal: false },
+  );
+
+  const bend = result.differences.find((difference) => difference.category === "bend");
+  const correction = bend?.corrections?.find((item) => item.kind === "resize");
+  assert.ok(correction?.kind === "resize");
+  assert.equal(correction.operation, "extend");
+  assert.equal(correction.endpoint, "both");
+  assert.ok(Math.abs(correction.value - 0.5) < 1e-9);
+  assert.ok(correction.eachEnd !== undefined && Math.abs(correction.eachEnd - 0.25) < 1e-9);
+  assert.equal(bend?.corrections?.some((item) => item.kind === "move"), false);
 });
 
 test("calcula a área planificada de um perfil U exportado em DXF", () => {

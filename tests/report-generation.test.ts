@@ -8,7 +8,7 @@ import { createComparisonReportPdf } from "../app/lib/report";
 const ONE_PIXEL_PNG =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
 
-function reportFixtureDxf(width: number, holeX: number) {
+function reportFixtureDxf(width: number, holeX: number, bendStart = 5, bendEnd = 45) {
   return `0
 SECTION
 2
@@ -64,11 +64,11 @@ DOBRA
 10
 50
 20
-5
+${bendStart}
 11
 50
 21
-45
+${bendEnd}
 0
 ENDSEC
 0
@@ -77,7 +77,7 @@ EOF`;
 
 test("gera um relatório PDF com as divergências calculadas", async () => {
   const documentA = parseDxfText(reportFixtureDxf(100, 20), "bandeja_solidworks.dxf");
-  const documentB = parseDxfText(reportFixtureDxf(102, 21), "bandeja_metalflow.dxf");
+  const documentB = parseDxfText(reportFixtureDxf(102, 21, 5.25, 44.75), "bandeja_metalflow.dxf");
   const transform = { x: -1, y: 0, rotation: 0 };
   const comparison = compareDocuments(documentA, documentB, transform, {
     tolerance: 0.2,

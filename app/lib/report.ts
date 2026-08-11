@@ -113,13 +113,32 @@ function differenceValue(difference: Difference) {
   return `${formatNumber(difference.value)}${suffix}`;
 }
 
+const CORRECTION_ENDPOINT_LABELS = {
+  left: "esquerda",
+  right: "direita",
+  top: "superior",
+  bottom: "inferior",
+  start: "inicial",
+  end: "final",
+  both: "ambas",
+} as const;
+
 function correctionValue(difference: Difference) {
-  if (!difference.correction) return "—";
-  const measurement = `${formatNumber(difference.correction.value)} mm`;
-  if (difference.correction.direction === "up") return `Subir ${measurement}`;
-  if (difference.correction.direction === "down") return `Descer ${measurement}`;
-  if (difference.correction.direction === "left") return `Mover ${measurement} para a esquerda`;
-  return `Mover ${measurement} para a direita`;
+  if (!difference.corrections?.length) return "—";
+  return difference.corrections.map((correction) => {
+    const measurement = `${formatNumber(correction.value)} mm`;
+    if (correction.kind === "move") {
+      if (correction.direction === "up") return `Subir ${measurement}`;
+      if (correction.direction === "down") return `Descer ${measurement}`;
+      if (correction.direction === "left") return `Mover ${measurement} para a esquerda`;
+      return `Mover ${measurement} para a direita`;
+    }
+    const operation = correction.operation === "extend" ? "Alongar" : "Encurtar";
+    if (correction.endpoint === "both" && correction.eachEnd !== undefined) {
+      return `${operation} ${measurement} (${formatNumber(correction.eachEnd)} mm em cada extremidade)`;
+    }
+    return `${operation} ${measurement} na extremidade ${CORRECTION_ENDPOINT_LABELS[correction.endpoint]}`;
+  }).join("; ");
 }
 
 function severityColor(severity: DifferenceSeverity) {
@@ -451,7 +470,7 @@ export function createComparisonReportPdf(input: ComparisonReportInput) {
     `Pequena divergência: acima da tolerância e até ${formatNumber(tolerance * 5)} mm.`,
     `Grande divergência: acima de ${formatNumber(tolerance * 5)} mm.`,
     `Ajuste aplicado ao Arquivo B: X ${signedNumber(transform.x)}, Y ${signedNumber(transform.y)}, rotação ${signedNumber(transform.rotation, "°")}.`,
-    "As correções direcionais indicam como mover o Arquivo B para coincidir com a Referência A.",
+    "As recomendações indicam como mover, alongar ou encurtar elementos do Arquivo B para coincidir com a Referência A.",
     "Valores geométricos são calculados diretamente das entidades importadas dos arquivos DXF.",
   ];
   pdf.text(criteria, 14, cursorY + 7, { maxWidth: 182, lineHeightFactor: 1.55 });

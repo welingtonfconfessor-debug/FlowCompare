@@ -99,13 +99,32 @@ const formatDifferenceMeasurement = (difference: Difference, signed = false) => 
   return `${sign}${formatNumber(Math.abs(rawValue), digits)}${differenceUnitSuffix(difference)}`;
 };
 
+const CORRECTION_ENDPOINT_LABELS = {
+  left: "esquerda",
+  right: "direita",
+  top: "superior",
+  bottom: "inferior",
+  start: "inicial",
+  end: "final",
+  both: "ambas",
+} as const;
+
 const formatDifferenceResult = (difference: Difference) => {
-  if (!difference.correction) return formatDifferenceMeasurement(difference, true);
-  const measurement = `${formatNumber(difference.correction.value)} mm`;
-  if (difference.correction.direction === "up") return `Subir ${measurement}`;
-  if (difference.correction.direction === "down") return `Descer ${measurement}`;
-  if (difference.correction.direction === "left") return `Mover ${measurement} para a esquerda`;
-  return `Mover ${measurement} para a direita`;
+  if (!difference.corrections?.length) return formatDifferenceMeasurement(difference, true);
+  return difference.corrections.map((correction) => {
+    const measurement = `${formatNumber(correction.value)} mm`;
+    if (correction.kind === "move") {
+      if (correction.direction === "up") return `Subir ${measurement}`;
+      if (correction.direction === "down") return `Descer ${measurement}`;
+      if (correction.direction === "left") return `Mover ${measurement} para a esquerda`;
+      return `Mover ${measurement} para a direita`;
+    }
+    const operation = correction.operation === "extend" ? "Alongar" : "Encurtar";
+    if (correction.endpoint === "both" && correction.eachEnd !== undefined) {
+      return `${operation} ${measurement} (${formatNumber(correction.eachEnd)} mm em cada extremidade)`;
+    }
+    return `${operation} ${measurement} na extremidade ${CORRECTION_ENDPOINT_LABELS[correction.endpoint]}`;
+  }).join("; ");
 };
 
 const formatFileSize = (size: number) => {

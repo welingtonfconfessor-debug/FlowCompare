@@ -132,10 +132,109 @@ function transformFeature(feature: ComparisonFeature, transform: DrawingTransfor
   };
 }
 
-function featureCorrection(
+const CORRECTION_DISPLAY_EPSILON = 0.005;
+
+function featureCenter(feature: ComparisonFeature) {
+  return {
+    x: (feature.bounds.minX + feature.bounds.maxX) / 2,
+    y: (feature.bounds.minY + feature.bounds.maxY) / 2,
+  };
+}
+
+function moveCorrections(deltaX: number, deltaY: number): NonNullable<Difference["corrections"]> {
+  const corrections: NonNullable<Difference["corrections"]> = [];
+  if (Math.abs(deltaX) >= CORRECTION_DISPLAY_EPSILON) {
+    corrections.push({
+      kind: "move",
+      direction: correctionDirection("x", deltaX),
+      value: Math.abs(deltaX),
+    });
+  }
+  if (Math.abs(deltaY) >= CORRECTION_DISPLAY_EPSILON) {
+    corrections.push({
+      kind: "move",
+      direction: correctionDirection("y", deltaY),
+      value: Math.abs(deltaY),
+    });
+  }
+  return corrections;
+}
+
+function longestSegment(feature: ComparisonFeature) {
+  return feature.segments.reduce<Segment | undefined>((longest, segment) => {
+    const length = Math.hypot(segment.b.x - segment.a.x, segment.b.y - segment.a.y);
+    if (!longest) return segment;
+    const longestLength = Math.hypot(longest.b.x - longest.a.x, longest.b.y - longest.a.y);
+    return length > longestLength ? segment : longest;
+  }, undefined);
+}
+
+function straightLineCorrections(
   featureA: ComparisonFeature,
   featureB: ComparisonFeature,
-): Difference["correction"] {
+): Difference["corrections"] {
+  const lineA = longestSegment(featureA);
+  const lineB = longestSegment(featureB);
+  if (!lineA || !lineB) return undefined;
+  let tangent = {
+    x: lineA.b.x - lineA.a.x,
+    y: lineA.b.y - lineA.a.y,
+  };
+  const lengthA = Math.hypot(tangent.x, tangent.y);
+  const vectorB = {
+    x: lineB.b.x - lineB.a.x,
+    y: lineB.b.y - lineB.a.y,
+  };
+  const lengthB = Math.hypot(vectorB.x, vectorB.y);
+  if (!lengthA || !lengthB) return undefined;
+  tangent = { x: tangent.x / lengthA, y: tangent.y / lengthA };
+  if (
+    (Math.abs(tangent.x) >= Math.abs(tangent.y) && tangent.x < 0) ||
+    (Math.abs(tangent.y) > Math.abs(tangent.x) && tangent.y < 0)
+  ) {
+    tangent = { x: -tangent.x, y: -tangent.y };
+  }
+  const unitB = { x: vectorB.x / lengthB, y: vectorB.y / lengthB };
+  const parallelism = Math.abs(tangent.x * unitB.x + tangent.y * unitB.y);
+  if (parallelism < 0.995) return undefined;
+
+  const project = (point: { x: number; y: number }) => point.x * tangent.x + point.y * tangent.y;
+  const projectionsA = featureA.segments.flatMap((segment) => [project(segment.a), project(segment.b)]);
+  const projectionsB = featureB.segments.flatMap((segment) => [project(segment.a), project(segment.b)]);
+  const minA = Math.min(...projectionsA);
+  const maxA = Math.max(...projectionsA);
+  const minB = Math.min(...projectionsB);
+  const maxB = Math.max(...projectionsB);
+  const tangentDelta = (minA + maxA - minB - maxB) / 2;
+  const normal = { x: -tangent.y, y: tangent.x };
+  const centerA = featureCenter(featureA);
+  const centerB = featureCenter(featureB);
+  const normalDelta =
+    (centerA.x - centerB.x) * normal.x +
+    (centerA.y - centerB.y) * normal.y;
+  const moveX = tangent.x * tangentDelta + normal.x * normalDelta;
+  const moveY = tangent.y * tangentDelta + normal.y * normalDelta;
+  const corrections = moveCorrections(moveX, moveY);
+  const lengthDelta = maxA - minA - (maxB - minB);
+  if (Math.abs(lengthDelta) >= CORRECTION_DISPLAY_EPSILON) {
+    corrections.push({
+      kind: "resize",
+      operation: lengthDelta > 0 ? "extend" : "shorten",
+      endpoint: "both",
+      value: Math.abs(lengthDelta),
+      eachEnd: Math.abs(lengthDelta) / 2,
+    });
+  }
+  return corrections.length ? corrections : undefined;
+}
+
+function featureCorrections(
+  featureA: ComparisonFeature,
+  featureB: ComparisonFeature,
+): Difference["corrections"] {
+  if (featureA.category === "bend") {
+    return straightLineCorrections(featureA, featureB);
+  }
   const centerA = {
     x: (featureA.bounds.minX + featureA.bounds.maxX) / 2,
     y: (featureA.bounds.minY + featureA.bounds.maxY) / 2,
@@ -146,13 +245,8 @@ function featureCorrection(
   };
   const deltaX = centerA.x - centerB.x;
   const deltaY = centerA.y - centerB.y;
-  const useHorizontalCorrection = Math.abs(deltaX) >= Math.abs(deltaY);
-  const delta = useHorizontalCorrection ? deltaX : deltaY;
-  if (Math.abs(delta) <= 0.000001) return undefined;
-  return {
-    direction: correctionDirection(useHorizontalCorrection ? "x" : "y", delta),
-    value: Math.abs(delta),
-  };
+  const corrections = moveCorrections(deltaX, deltaY);
+  return corrections.length ? corrections : undefined;
 }
 
 function matchedFeatureDifference(
@@ -171,7 +265,7 @@ function matchedFeatureDifference(
     value,
     signedValue: value * direction,
     unit: "mm",
-    correction: featureCorrection(featureA, featureB),
+    corrections: featureCorrections(featureA, featureB),
     bounds: unionBounds([featureA.bounds, featureB.bounds]),
     source: "B",
     entityIds: { A: featureA.entityIds, B: featureB.entityIds },
@@ -236,9 +330,9 @@ function contourSideDifferences(
       value,
       signedValue: correctionDelta,
       unit: "mm",
-      correction:
-        value > 0.000001
-          ? { direction: correctionDirection(side.axis, correctionDelta), value }
+      corrections:
+        value >= CORRECTION_DISPLAY_EPSILON
+          ? [{ kind: "move", direction: correctionDirection(side.axis, correctionDelta), value }]
           : undefined,
       bounds: contourSideBounds(side, featureA.bounds, featureB.bounds),
       source: "B",
