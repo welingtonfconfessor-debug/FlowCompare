@@ -132,6 +132,29 @@ function transformFeature(feature: ComparisonFeature, transform: DrawingTransfor
   };
 }
 
+function featureCorrection(
+  featureA: ComparisonFeature,
+  featureB: ComparisonFeature,
+): Difference["correction"] {
+  const centerA = {
+    x: (featureA.bounds.minX + featureA.bounds.maxX) / 2,
+    y: (featureA.bounds.minY + featureA.bounds.maxY) / 2,
+  };
+  const centerB = {
+    x: (featureB.bounds.minX + featureB.bounds.maxX) / 2,
+    y: (featureB.bounds.minY + featureB.bounds.maxY) / 2,
+  };
+  const deltaX = centerA.x - centerB.x;
+  const deltaY = centerA.y - centerB.y;
+  const useHorizontalCorrection = Math.abs(deltaX) >= Math.abs(deltaY);
+  const delta = useHorizontalCorrection ? deltaX : deltaY;
+  if (Math.abs(delta) <= 0.000001) return undefined;
+  return {
+    direction: correctionDirection(useHorizontalCorrection ? "x" : "y", delta),
+    value: Math.abs(delta),
+  };
+}
+
 function matchedFeatureDifference(
   featureA: ComparisonFeature,
   featureB: ComparisonFeature,
@@ -148,6 +171,7 @@ function matchedFeatureDifference(
     value,
     signedValue: value * direction,
     unit: "mm",
+    correction: featureCorrection(featureA, featureB),
     bounds: unionBounds([featureA.bounds, featureB.bounds]),
     source: "B",
     entityIds: { A: featureA.entityIds, B: featureB.entityIds },

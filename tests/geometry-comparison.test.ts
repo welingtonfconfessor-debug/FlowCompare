@@ -4,7 +4,7 @@ import { alignmentForDocuments } from "../app/lib/alignment";
 import { compareDocuments } from "../app/lib/comparison";
 import { parseDxfText } from "../app/lib/dxf";
 
-function trayDxf(width: number, holeX: number) {
+function trayDxf(width: number, holeX: number, bendX = 50) {
   return `0
 SECTION
 2
@@ -58,11 +58,11 @@ LINE
 8
 DOBRA
 10
-50
+${bendX}
 20
 5
 11
-50
+${bendX}
 21
 45
 0
@@ -249,6 +249,22 @@ test("informa como corrigir cada limite do contorno do arquivo B", () => {
     assert.equal(difference.correction.direction, direction);
     assert.ok(Math.abs(difference.correction.value - 0.25) < 1e-9);
   });
+});
+
+test("recomenda o movimento necessário para uma linha de dobra", () => {
+  const documentA = parseDxfText(trayDxf(100, 20, 50), "referencia.dxf");
+  const documentB = parseDxfText(trayDxf(100, 20, 49.75), "comparado.dxf");
+  const result = compareDocuments(
+    documentA,
+    documentB,
+    { x: 0, y: 0, rotation: 0 },
+    { tolerance: 0.2, ignoreInternal: false },
+  );
+
+  const bend = result.differences.find((difference) => difference.category === "bend");
+  assert.ok(bend?.correction);
+  assert.equal(bend.correction.direction, "right");
+  assert.ok(Math.abs(bend.correction.value - 0.25) < 1e-9);
 });
 
 test("calcula a área planificada de um perfil U exportado em DXF", () => {
