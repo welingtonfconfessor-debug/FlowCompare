@@ -135,6 +135,57 @@ ENDSEC
 EOF`;
 }
 
+function contourWithShiftedLowerLeftDxf(offset: number) {
+  return `0
+SECTION
+2
+ENTITIES
+0
+LWPOLYLINE
+8
+CONTORNO
+90
+8
+70
+1
+10
+0
+20
+0
+10
+100
+20
+0
+10
+100
+20
+50
+10
+0
+20
+50
+10
+0
+20
+25
+10
+${offset}
+20
+25
+10
+${offset}
+20
+0
+10
+0
+20
+0
+0
+ENDSEC
+0
+EOF`;
+}
+
 test("lê geometrias e estatísticas reais do DXF", () => {
   const document = parseDxfText(trayDxf(100, 20), "bandeja-a.dxf");
   assert.equal(document.stats.width, 100);
@@ -201,7 +252,7 @@ test("trata linhas conectadas e polilinha como o mesmo contorno após rotação"
   assert.ok(Math.abs(result.alignedStatsB.height - 50) < 1e-9);
 });
 
-test("reporta uma única divergência de contorno sem inverter largura e comprimento", () => {
+test("reporta as linhas externas afetadas sem inverter largura e comprimento", () => {
   const documentA = parseDxfText(rectangleFromLinesDxf(100, 50), "referencia.dxf");
   const documentB = parseDxfText(rectangleFromPolylineDxf(50, 100.4), "comparado.dxf");
   const transform = alignmentForDocuments(documentA, documentB, "origin", 90);
@@ -220,7 +271,7 @@ test("reporta uma única divergência de contorno sem inverter largura e comprim
   assert.ok(height && Math.abs(height.signedValue) < 1e-9);
   assert.equal(contours.length, 4);
   assert.equal(result.totalCompared, 10);
-  assert.equal(result.small, 2);
+  assert.equal(result.small, 4);
   assert.equal(result.large, 0);
   assert.ok(result.maxDifference < 1);
   assert.ok(result.similarity > 95);
@@ -238,10 +289,10 @@ test("informa como corrigir cada limite do contorno do arquivo B", () => {
   );
 
   const expected = new Map([
-    ["Linha superior", "up"],
-    ["Linha inferior", "down"],
-    ["Linha esquerda", "left"],
-    ["Linha direita", "right"],
+    ["Linha externa superior", "up"],
+    ["Linha externa inferior", "down"],
+    ["Linha externa esquerda", "left"],
+    ["Linha externa direita", "right"],
   ]);
   expected.forEach((direction, label) => {
     const difference = result.differences.find((item) => item.label === label);
@@ -269,7 +320,7 @@ test("recomenda o movimento necessário para uma linha de dobra", () => {
   assert.ok(Math.abs(correction.value - 0.25) < 1e-9);
 });
 
-test("recomenda alongar a dobra quando os centros coincidem e as extremidades diferem", () => {
+test("não atribui à dobra uma diferença existente apenas nas extremidades", () => {
   const documentA = parseDxfText(trayDxf(100, 20, 50, 5, 45), "referencia.dxf");
   const documentB = parseDxfText(trayDxf(100, 20, 50.001, 5.25, 44.75), "comparado.dxf");
   const result = compareDocuments(
@@ -280,13 +331,34 @@ test("recomenda alongar a dobra quando os centros coincidem e as extremidades di
   );
 
   const bend = result.differences.find((difference) => difference.category === "bend");
-  const correction = bend?.corrections?.find((item) => item.kind === "resize");
-  assert.ok(correction?.kind === "resize");
-  assert.equal(correction.operation, "extend");
-  assert.equal(correction.endpoint, "both");
-  assert.ok(Math.abs(correction.value - 0.5) < 1e-9);
-  assert.ok(correction.eachEnd !== undefined && Math.abs(correction.eachEnd - 0.25) < 1e-9);
-  assert.equal(bend?.corrections?.some((item) => item.kind === "move"), false);
+  assert.ok(bend);
+  assert.equal(bend.severity, "correct");
+  assert.ok(bend.value < 0.005);
+  assert.equal(bend.corrections, undefined);
+});
+
+test("atribui ao contorno uma diferença local com limites totais iguais", () => {
+  const documentA = parseDxfText(contourWithShiftedLowerLeftDxf(0), "referencia.dxf");
+  const documentB = parseDxfText(contourWithShiftedLowerLeftDxf(0.25), "comparado.dxf");
+  const result = compareDocuments(
+    documentA,
+    documentB,
+    { x: 0, y: 0, rotation: 0 },
+    { tolerance: 0.2, ignoreInternal: false },
+  );
+
+  const width = result.differences.find((difference) => difference.id === "metric-width");
+  const height = result.differences.find((difference) => difference.id === "metric-height");
+  const localContour = result.differences.find(
+    (difference) => difference.category === "contour" && Math.abs(difference.value - 0.25) < 1e-9,
+  );
+  assert.equal(width?.severity, "correct");
+  assert.equal(height?.severity, "correct");
+  assert.ok(localContour);
+  assert.match(localContour.label, /externa|externo/);
+  const correction = localContour.corrections?.find((item) => item.kind === "move");
+  assert.ok(correction?.kind === "move");
+  assert.equal(correction.direction, "left");
 });
 
 test("calcula a área planificada de um perfil U exportado em DXF", () => {

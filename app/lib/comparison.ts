@@ -18,6 +18,7 @@ import {
   transformBounds,
   transformSegment,
   unionBounds,
+  type GeometryComponent,
 } from "./geometry";
 
 type CompareOptions = {
@@ -33,6 +34,8 @@ type ComparisonFeature = {
   segments: Segment[];
   bounds: Bounds;
   length: number;
+  kind: "line" | "shape";
+  axis?: "horizontal" | "vertical";
 };
 
 function severityFor(value: number, tolerance: number): DifferenceSeverity {
@@ -43,6 +46,75 @@ function severityFor(value: number, tolerance: number): DifferenceSeverity {
 
 function boundsArea(bounds: Bounds) {
   return Math.max(0, bounds.maxX - bounds.minX) * Math.max(0, bounds.maxY - bounds.minY);
+}
+
+function segmentAxis(segment: Segment) {
+  const deltaX = Math.abs(segment.b.x - segment.a.x);
+  const deltaY = Math.abs(segment.b.y - segment.a.y);
+  const length = Math.hypot(deltaX, deltaY);
+  if (!length) return undefined;
+  if (deltaY <= length * 0.001) return "horizontal" as const;
+  if (deltaX <= length * 0.001) return "vertical" as const;
+  return undefined;
+}
+
+function axisFromSegments(segments: Segment[]) {
+  const segment = segments.reduce<Segment | undefined>((longest, candidate) => {
+    if (!longest) return candidate;
+    const currentLength = Math.hypot(candidate.b.x - candidate.a.x, candidate.b.y - candidate.a.y);
+    const longestLength = Math.hypot(longest.b.x - longest.a.x, longest.b.y - longest.a.y);
+    return currentLength > longestLength ? candidate : longest;
+  }, undefined);
+  return segment ? segmentAxis(segment) : undefined;
+}
+
+function externalContourFeatures(component: GeometryComponent): ComparisonFeature[] {
+  const diagonal = Math.hypot(
+    component.bounds.maxX - component.bounds.minX,
+    component.bounds.maxY - component.bounds.minY,
+  );
+  const minimumLength = Math.max(0.1, diagonal * 0.005);
+  const boundaryTolerance = Math.max(0.01, diagonal * 0.00001);
+  const edges = component.segments
+    .map((segment) => ({
+      segment,
+      axis: segmentAxis(segment),
+      length: Math.hypot(segment.b.x - segment.a.x, segment.b.y - segment.a.y),
+    }))
+    .filter((edge): edge is typeof edge & { axis: "horizontal" | "vertical" } =>
+      edge.axis !== undefined && edge.length >= minimumLength,
+    );
+  if (edges.length < 2) return [];
+
+  const labels = new Map<string, number>();
+  return edges.map((edge, index) => {
+    const bounds = boundsFromSegments([edge.segment]);
+    let baseLabel: string;
+    if (edge.axis === "horizontal" && Math.abs(bounds.maxY - component.bounds.maxY) <= boundaryTolerance) {
+      baseLabel = "Linha externa superior";
+    } else if (edge.axis === "horizontal" && Math.abs(bounds.minY - component.bounds.minY) <= boundaryTolerance) {
+      baseLabel = "Linha externa inferior";
+    } else if (edge.axis === "vertical" && Math.abs(bounds.minX - component.bounds.minX) <= boundaryTolerance) {
+      baseLabel = "Linha externa esquerda";
+    } else if (edge.axis === "vertical" && Math.abs(bounds.maxX - component.bounds.maxX) <= boundaryTolerance) {
+      baseLabel = "Linha externa direita";
+    } else {
+      baseLabel = edge.axis === "horizontal" ? "Trecho externo horizontal" : "Trecho externo vertical";
+    }
+    const count = (labels.get(baseLabel) ?? 0) + 1;
+    labels.set(baseLabel, count);
+    return {
+      id: `${component.id}-edge-${index}`,
+      label: count === 1 ? baseLabel : `${baseLabel} ${count}`,
+      category: "contour",
+      entityIds: [edge.segment.entityId],
+      segments: [edge.segment],
+      bounds,
+      length: edge.length,
+      kind: "line",
+      axis: edge.axis,
+    };
+  });
 }
 
 function comparisonFeatures(entities: EntityGeometry[]): ComparisonFeature[] {
@@ -58,17 +130,19 @@ function comparisonFeatures(entities: EntityGeometry[]): ComparisonFeature[] {
   let cutoutIndex = 0;
   let geometryIndex = 0;
 
-  const componentFeatures = components.map((component): ComparisonFeature => {
+  const componentFeatures = components.flatMap((component): ComparisonFeature[] => {
     let category: DifferenceCategory = "geometry";
     let label = `Geometria ${++geometryIndex}`;
     if (component.closed && component.id === externalId) {
       category = "contour";
       label = "Contorno externo";
+      const contourLines = externalContourFeatures(component);
+      if (contourLines.length) return contourLines;
     } else if (component.closed) {
       category = "cutout";
       label = `Recorte ${++cutoutIndex}`;
     }
-    return {
+    return [{
       id: component.id,
       label,
       category,
@@ -76,7 +150,8 @@ function comparisonFeatures(entities: EntityGeometry[]): ComparisonFeature[] {
       segments: component.segments,
       bounds: component.bounds,
       length: component.length,
-    };
+      kind: "shape",
+    }];
   });
 
   const holeFeatures = holes.map((entity, index): ComparisonFeature => ({
@@ -89,6 +164,7 @@ function comparisonFeatures(entities: EntityGeometry[]): ComparisonFeature[] {
     segments: entity.segments,
     bounds: entity.bounds,
     length: entity.length,
+    kind: "shape",
   }));
 
   const bendFeatures = bends.map((entity, index): ComparisonFeature => ({
@@ -99,6 +175,8 @@ function comparisonFeatures(entities: EntityGeometry[]): ComparisonFeature[] {
     segments: entity.segments,
     bounds: entity.bounds,
     length: entity.length,
+    kind: "line",
+    axis: axisFromSegments(entity.segments),
   }));
 
   return [...componentFeatures, ...holeFeatures, ...bendFeatures];
@@ -116,7 +194,32 @@ function segmentSetDistance(source: Segment[], target: Segment[], tolerance: num
   );
 }
 
+function bendSupportDistance(first: ComparisonFeature, second: ComparisonFeature) {
+  const lineA = longestSegment(first);
+  const lineB = longestSegment(second);
+  if (!lineA || !lineB) return Number.POSITIVE_INFINITY;
+  const vectorA = { x: lineA.b.x - lineA.a.x, y: lineA.b.y - lineA.a.y };
+  const vectorB = { x: lineB.b.x - lineB.a.x, y: lineB.b.y - lineB.a.y };
+  const lengthA = Math.hypot(vectorA.x, vectorA.y);
+  const lengthB = Math.hypot(vectorB.x, vectorB.y);
+  if (!lengthA || !lengthB) return Number.POSITIVE_INFINITY;
+  const tangentA = { x: vectorA.x / lengthA, y: vectorA.y / lengthA };
+  const tangentB = { x: vectorB.x / lengthB, y: vectorB.y / lengthB };
+  const parallelism = Math.abs(tangentA.x * tangentB.x + tangentA.y * tangentB.y);
+  const normal = { x: -tangentA.y, y: tangentA.x };
+  const centerA = featureCenter(first);
+  const centerB = featureCenter(second);
+  const supportOffset = Math.abs(
+    (centerA.x - centerB.x) * normal.x +
+    (centerA.y - centerB.y) * normal.y,
+  );
+  return supportOffset + (1 - parallelism) * Math.max(lengthA, lengthB);
+}
+
 function featureDistance(first: ComparisonFeature, second: ComparisonFeature, tolerance: number) {
+  if (first.category === "bend" && second.category === "bend") {
+    return bendSupportDistance(first, second);
+  }
   return Math.max(
     segmentSetDistance(first.segments, second.segments, tolerance),
     segmentSetDistance(second.segments, first.segments, tolerance),
@@ -129,6 +232,7 @@ function transformFeature(feature: ComparisonFeature, transform: DrawingTransfor
     ...feature,
     segments,
     bounds: boundsFromSegments(segments),
+    axis: feature.kind === "line" ? axisFromSegments(segments) : feature.axis,
   };
 }
 
@@ -228,11 +332,39 @@ function straightLineCorrections(
   return corrections.length ? corrections : undefined;
 }
 
+function bendLineCorrections(
+  featureA: ComparisonFeature,
+  featureB: ComparisonFeature,
+): Difference["corrections"] {
+  const lineA = longestSegment(featureA);
+  const lineB = longestSegment(featureB);
+  if (!lineA || !lineB) return undefined;
+  const vectorA = { x: lineA.b.x - lineA.a.x, y: lineA.b.y - lineA.a.y };
+  const vectorB = { x: lineB.b.x - lineB.a.x, y: lineB.b.y - lineB.a.y };
+  const lengthA = Math.hypot(vectorA.x, vectorA.y);
+  const lengthB = Math.hypot(vectorB.x, vectorB.y);
+  if (!lengthA || !lengthB) return undefined;
+  const tangent = { x: vectorA.x / lengthA, y: vectorA.y / lengthA };
+  const unitB = { x: vectorB.x / lengthB, y: vectorB.y / lengthB };
+  if (Math.abs(tangent.x * unitB.x + tangent.y * unitB.y) < 0.995) return undefined;
+  const normal = { x: -tangent.y, y: tangent.x };
+  const centerA = featureCenter(featureA);
+  const centerB = featureCenter(featureB);
+  const normalDelta =
+    (centerA.x - centerB.x) * normal.x +
+    (centerA.y - centerB.y) * normal.y;
+  const corrections = moveCorrections(normal.x * normalDelta, normal.y * normalDelta);
+  return corrections.length ? corrections : undefined;
+}
+
 function featureCorrections(
   featureA: ComparisonFeature,
   featureB: ComparisonFeature,
 ): Difference["corrections"] {
   if (featureA.category === "bend") {
+    return bendLineCorrections(featureA, featureB);
+  }
+  if (featureA.category === "contour" && featureA.kind === "line") {
     return straightLineCorrections(featureA, featureB);
   }
   const centerA = {
@@ -280,10 +412,10 @@ type ContourSide = {
 };
 
 const CONTOUR_SIDES: ContourSide[] = [
-  { id: "top", label: "Linha superior", axis: "y", coordinate: "maxY" },
-  { id: "bottom", label: "Linha inferior", axis: "y", coordinate: "minY" },
-  { id: "left", label: "Linha esquerda", axis: "x", coordinate: "minX" },
-  { id: "right", label: "Linha direita", axis: "x", coordinate: "maxX" },
+  { id: "top", label: "Linha externa superior", axis: "y", coordinate: "maxY" },
+  { id: "bottom", label: "Linha externa inferior", axis: "y", coordinate: "minY" },
+  { id: "left", label: "Linha externa esquerda", axis: "x", coordinate: "minX" },
+  { id: "right", label: "Linha externa direita", axis: "x", coordinate: "maxX" },
 ];
 
 function correctionDirection(axis: ContourSide["axis"], delta: number) {
@@ -347,7 +479,7 @@ function matchedFeatureDifferences(
   value: number,
   tolerance: number,
 ) {
-  if (featureA.category === "contour") {
+  if (featureA.category === "contour" && featureA.kind === "shape") {
     return contourSideDifferences(featureA, featureB, tolerance);
   }
   return [matchedFeatureDifference(featureA, featureB, value, tolerance)];
@@ -391,7 +523,10 @@ function compareFeatures(
   const candidates = featuresA.flatMap((featureA, indexA) =>
     featuresB
       .map((featureB, indexB) => ({ featureA, featureB, indexA, indexB }))
-      .filter(({ featureA: first, featureB: second }) => first.category === second.category)
+      .filter(({ featureA: first, featureB: second }) =>
+        first.category === second.category &&
+        (!first.axis || !second.axis || first.axis === second.axis),
+      )
       .map((candidate) => ({
         ...candidate,
         distance: featureDistance(candidate.featureA, candidate.featureB, tolerance),
